@@ -3121,8 +3121,8 @@
                         </div>
                         <div id="core-tab-cloud" class="core-tab-content hidden space-y-4">
                             <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                                <div class="font-bold text-blue-800"><i class="fa-brands fa-google-drive mr-2" aria-hidden="true"></i>Google Drive 설정 동기화</div>
-                                <p class="mt-1 text-xs leading-relaxed text-blue-700">동기화 위치는 <b>내 드라이브 / Rumos / lumos-settings.json</b>으로 고정됩니다. 채팅과 이미지는 이번 단계에 포함하지 않습니다.</p>
+                                <div class="font-bold text-blue-800"><i class="fa-brands fa-google-drive mr-2" aria-hidden="true"></i>Google Drive 전체 설정 동기화</div>
+                                <p class="mt-1 text-xs leading-relaxed text-blue-700">동기화 위치는 <b>내 드라이브 / Rumos / lumos-settings.json</b>으로 고정됩니다. API 키·프록시 토큰·NAI 토큰을 포함한 전체 설정을 동기화합니다. 채팅과 이미지는 포함하지 않습니다.</p>
                             </div>
 
                             <div class="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
@@ -3130,7 +3130,8 @@
                                     <span class="mb-1 block text-sm font-bold text-gray-700">Google OAuth 웹 클라이언트 ID</span>
                                     <input id="lumos-drive-client-id-v120" type="text" autocomplete="off" spellcheck="false" class="w-full rounded-lg border p-2 font-mono text-xs" placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com" aria-describedby="lumos-drive-client-id-help-v120">
                                 </label>
-                                <p id="lumos-drive-client-id-help-v120" class="text-xs leading-relaxed text-gray-500">NAI 스튜디오와 같은 GitHub Pages 주소를 사용한다면 같은 웹 클라이언트 ID를 넣어도 됩니다. 이 값은 현재 기기에만 저장되며 Drive로 올라가지 않습니다.</p>
+                                <p id="lumos-drive-client-id-help-v120" class="text-xs leading-relaxed text-gray-500">첫 Google 연결 때 웹 클라이언트 ID를 한 번 입력합니다. 이후 전체 설정 파일에도 함께 저장됩니다. Google 액세스 토큰만 기기마다 다시 연결합니다.</p>
+                                <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">Rumos 폴더의 <b>lumos-settings.json</b>에는 개인 API 키와 토큰이 포함됩니다.</p>
                                 <div id="lumos-drive-origin-v120" class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" role="status" aria-live="polite"></div>
                                 <div class="flex flex-wrap gap-2">
                                     <button id="lumos-drive-connect-v120" type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Google 연결</button>
@@ -32576,7 +32577,7 @@ body { min-height: 100dvh; }
 </script>
 
 
-<!-- LUMOS_SECTION: Google Drive settings sync (v120) -->
+<!-- LUMOS_SECTION: Google Drive full settings sync (v121) -->
 <style id="lumos-v120-drive-sync-style">
   #core-tab-cloud button:disabled{opacity:.55;cursor:not-allowed}
   body.dark-mode #core-tab-cloud .bg-white{background:#111827!important}
@@ -32588,14 +32589,14 @@ body { min-height: 100dvh; }
   body.dark-mode #core-tab-cloud .border-gray-200,
   body.dark-mode #core-tab-cloud .border-gray-300{border-color:#334155!important}
 </style>
-<script id="lumos-v120-drive-sync-script">
+<script id="lumos-v121-drive-sync-script">
 (function(){
   'use strict';
-  const FLAG='__LUMOS_DRIVE_SYNC_V120__';
+  const FLAG='__LUMOS_DRIVE_SYNC_V121__';
   if(window[FLAG]) return;
   window[FLAG]=true;
 
-  const VERSION=120;
+  const VERSION=121;
   const CONFIG_KEY='LUMOS_DRIVE_SYNC_V120_CONFIG';
   const DEVICE_KEY='LUMOS_DRIVE_SYNC_V120_DEVICE';
   const FOLDER_NAME='Rumos';
@@ -32612,6 +32613,8 @@ body { min-height: 100dvh; }
     remote:null, lastError:'', lastOperation:'대기 중'
   };
 
+  // v121: API keys and authentication headers are intentionally included in cloud settings.
+  // The secret-key detector remains only for safely importing an older v120 redacted file.
   const secretExact=new Set([
     'apikey','openaiapikey','ollamaapikey','naitoken','token','accesstoken','refreshtoken',
     'proxytoken','lumosproxytoken','authorization','authheader','clientsecret','password','credential','credentials','bearer'
@@ -32628,7 +32631,7 @@ body { min-height: 100dvh; }
   function deviceId(){let id='';try{id=localStorage.getItem(DEVICE_KEY)||''}catch(_){}if(!id){id=(crypto.randomUUID?crypto.randomUUID():`device-${Date.now()}-${Math.random().toString(36).slice(2)}`);try{localStorage.setItem(DEVICE_KEY,id)}catch(_){}}return id}
   function loadConfig(){let cfg={};try{cfg=safeJson(localStorage.getItem(CONFIG_KEY)||'{}',{})}catch(_){}return Object.assign({clientId:'',autoSync:false,lastSyncAt:0,lastCloudChecksum:'',lastCloudUpdatedAt:0,localChangedAt:0,folderId:'',fileId:'',everConnected:false},cfg||{})}
   let config=loadConfig();
-  function saveConfig(){try{localStorage.setItem(CONFIG_KEY,JSON.stringify(config))}catch(e){console.warn('[Lumos v120] sync config save failed',e)}}
+  function saveConfig(){try{localStorage.setItem(CONFIG_KEY,JSON.stringify(config))}catch(e){console.warn('[Lumos v121] sync config save failed',e)}}
   function show(msg){try{showMessage(msg)}catch(_){console.log(msg)}}
   function setOperation(msg,error){state.lastOperation=String(msg||'');state.lastError=error?String(error?.message||error):'';render()}
   function fmtTime(ms){if(!Number(ms))return '없음';try{return new Date(Number(ms)).toLocaleString('ko-KR')}catch(_){return String(ms)}}
@@ -32641,41 +32644,48 @@ body { min-height: 100dvh; }
   function isDataUrl(v){return typeof v==='string'&&/^data:(image|audio|video|application)\//i.test(v)}
   function isSecretKey(key){const k=String(key||'').replace(/[^a-z0-9]/gi,'').toLowerCase();if(secretExact.has(k))return true;if(/apikey$/.test(k))return true;if(/^(access|refresh|auth|proxy|nai|bearer).*token$/.test(k))return true;if(/authorization$/.test(k))return true;return false}
   function isRuntimeRoot(key){return /^(claude|gemini|prompt).*cache(audit|diagnostic|last|notice|runtime|migration)/i.test(String(key||''))||/^(lastError|lastUsage|runtimeDiagnostic)/i.test(String(key||''))}
-  function sanitize(value,key='',depth=0){
+  function sanitizeFull(value,key='',depth=0){
     if(depth>40)return undefined;
-    if(isSecretKey(key)||isDataUrl(value))return undefined;
+    if(isDataUrl(value))return undefined;
     if(depth===1&&(localOnlyRoot.has(key)||isRuntimeRoot(key)||String(key).startsWith('__lumos')))return undefined;
     if(value===null||['string','number','boolean'].includes(typeof value))return value;
-    if(Array.isArray(value)){const out=[];for(const item of value){const v=sanitize(item,'',depth+1);if(v!==undefined)out.push(v)}return out}
-    if(typeof value==='object'){const out={};for(const [k,v0] of Object.entries(value)){const v=sanitize(v0,k,depth+1);if(v!==undefined)out[k]=v}return out}
+    if(Array.isArray(value)){const out=[];for(const item of value){const v=sanitizeFull(item,'',depth+1);if(v!==undefined)out.push(v)}return out}
+    if(typeof value==='object'){const out={};for(const [k,v0] of Object.entries(value)){const v=sanitizeFull(v0,k,depth+1);if(v!==undefined)out[k]=v}return out}
     return undefined;
   }
-  function buildCloudSettings(){return sanitize(SETTINGS,'SETTINGS',0)||{}}
-  function restoreLocalSecrets(localValue,cloudValue,key='',depth=0){
+  function buildCloudSettings(){return sanitizeFull(SETTINGS,'SETTINGS',0)||{}}
+  function restoreLegacySecrets(localValue,cloudValue,key='',depth=0){
     if(depth>40)return clone(cloudValue);
     if(isSecretKey(key))return clone(localValue);
-    if(Array.isArray(cloudValue))return cloudValue.map((v,i)=>{let localItem=Array.isArray(localValue)?localValue[i]:undefined;if(v&&typeof v==='object'&&!Array.isArray(v)&&Array.isArray(localValue)){const identity=['id','modelId','name','key'].find(k=>v[k]!=null);if(identity){const matched=localValue.find(item=>item&&typeof item==='object'&&String(item[identity])===String(v[identity]));if(matched)localItem=matched}}return restoreLocalSecrets(localItem,v,'',depth+1)});
+    if(Array.isArray(cloudValue))return cloudValue.map((v,i)=>{let localItem=Array.isArray(localValue)?localValue[i]:undefined;if(v&&typeof v==='object'&&!Array.isArray(v)&&Array.isArray(localValue)){const identity=['id','modelId','name','key'].find(k=>v[k]!=null);if(identity){const matched=localValue.find(item=>item&&typeof item==='object'&&String(item[identity])===String(v[identity]));if(matched)localItem=matched}}return restoreLegacySecrets(localItem,v,'',depth+1)});
     if(cloudValue&&typeof cloudValue==='object'){
       const out={};
-      for(const [k,v] of Object.entries(cloudValue))out[k]=restoreLocalSecrets(localValue&&typeof localValue==='object'?localValue[k]:undefined,v,k,depth+1);
+      for(const [k,v] of Object.entries(cloudValue))out[k]=restoreLegacySecrets(localValue&&typeof localValue==='object'?localValue[k]:undefined,v,k,depth+1);
       if(localValue&&typeof localValue==='object')for(const [k,v] of Object.entries(localValue))if(isSecretKey(k)&&!(k in out))out[k]=clone(v);
       return out;
     }
     return clone(cloudValue);
   }
-  function mergeDownloadedSettings(cloud){
-    const merged=restoreLocalSecrets(SETTINGS,cloud,'SETTINGS',0)||{};
+  function preserveRuntimeRoots(merged){
     for(const key of localOnlyRoot)if(Object.prototype.hasOwnProperty.call(SETTINGS,key))merged[key]=clone(SETTINGS[key]);
     for(const key of Object.keys(SETTINGS))if(isRuntimeRoot(key)||String(key).startsWith('__lumos'))merged[key]=clone(SETTINGS[key]);
     return merged;
+  }
+  function mergeDownloadedSettings(cloud,payload={}){
+    const full=payload.syncMode==='full' || payload.schema==='lumos.settings.sync.v2';
+    const merged=full?clone(cloud):(restoreLegacySecrets(SETTINGS,cloud,'SETTINGS',0)||{});
+    return preserveRuntimeRoots(merged||{});
   }
   function buildPayload(){
     const settings=buildCloudSettings();
     const checksum=hashText(stableStringify(settings));
     const updatedAtMs=Number(config.localChangedAt)||now();
-    return {schema:'lumos.settings.sync.v1',app:'Lumos',version:VERSION,folder:FOLDER_NAME,file:FILE_NAME,updatedAt:new Date(updatedAtMs).toISOString(),updatedAtMs,updatedBy:deviceId(),origin:location.origin||location.href,checksum,settings};
+    return {schema:'lumos.settings.sync.v2',syncMode:'full',containsCredentials:true,app:'Lumos',version:VERSION,folder:FOLDER_NAME,file:FILE_NAME,updatedAt:new Date(updatedAtMs).toISOString(),updatedAtMs,updatedBy:deviceId(),origin:location.origin||location.href,checksum,syncConfig:{clientId:String(config.clientId||''),autoSync:!!config.autoSync},settings};
   }
-  function validatePayload(payload){if(!payload||payload.schema!=='lumos.settings.sync.v1'||!payload.settings||typeof payload.settings!=='object')throw new Error('Lumos 설정 동기화 파일 형식이 아닙니다.');const checksum=hashText(stableStringify(payload.settings));if(payload.checksum&&payload.checksum!==checksum)throw new Error('클라우드 설정 체크섬이 일치하지 않습니다.');payload.checksum=checksum;return payload}
+  function validatePayload(payload){
+    if(!payload||!['lumos.settings.sync.v1','lumos.settings.sync.v2'].includes(payload.schema)||!payload.settings||typeof payload.settings!=='object')throw new Error('Lumos 설정 동기화 파일 형식이 아닙니다.');
+    const checksum=hashText(stableStringify(payload.settings));if(payload.checksum&&payload.checksum!==checksum)throw new Error('클라우드 설정 체크섬이 일치하지 않습니다.');payload.checksum=checksum;return payload;
+  }
 
   function escapeQ(value){return String(value||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
   async function ensureGis(){
@@ -32714,11 +32724,11 @@ body { min-height: 100dvh; }
   }
   async function listFiles(q,interactive=true){const p=new URLSearchParams({q,spaces:'drive',pageSize:'20',orderBy:'modifiedTime desc',fields:'files(id,name,mimeType,modifiedTime,createdTime,size,appProperties)'});const res=await driveFetch(`${API_ROOT}/files?${p}`,{},interactive);const data=await res.json();return Array.isArray(data.files)?data.files:[]}
   async function findFolder(interactive=true){const q=`name='${escapeQ(FOLDER_NAME)}' and mimeType='${FOLDER_MIME}' and 'root' in parents and trashed=false`;const files=await listFiles(q,interactive);return files[0]||null}
-  async function createFolder(interactive=true){const res=await driveFetch(`${API_ROOT}/files?fields=id,name,modifiedTime`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:FOLDER_NAME,mimeType:FOLDER_MIME,parents:['root'],appProperties:{lumos:'settings-sync-v120'}})},interactive);return await res.json()}
+  async function createFolder(interactive=true){const res=await driveFetch(`${API_ROOT}/files?fields=id,name,modifiedTime`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:FOLDER_NAME,mimeType:FOLDER_MIME,parents:['root'],appProperties:{lumos:'settings-sync-v121'}})},interactive);return await res.json()}
   async function ensureFolder(interactive=true,create=true){let folder=await findFolder(interactive);if(!folder&&create)folder=await createFolder(interactive);if(folder){config.folderId=folder.id;saveConfig()}return folder}
   async function findSettingsFile(folderId,interactive=true){if(!folderId)return null;const q=`name='${escapeQ(FILE_NAME)}' and '${escapeQ(folderId)}' in parents and trashed=false`;const files=await listFiles(q,interactive);return files[0]||null}
   async function readCloudFile(fileId,interactive=true){const res=await driveFetch(`${API_ROOT}/files/${encodeURIComponent(fileId)}?alt=media`,{},interactive);return validatePayload(await res.json())}
-  async function createCloudFile(folderId,payload,interactive=true){const meta={name:FILE_NAME,mimeType:'application/json',parents:[folderId],appProperties:{lumos:'settings-sync-v120',schema:'lumos.settings.sync.v1'}};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const res=await driveFetch(`${UPLOAD_ROOT}/files?uploadType=multipart&fields=id,name,modifiedTime,size`,{method:'POST',body:form},interactive);return await res.json()}
+  async function createCloudFile(folderId,payload,interactive=true){const meta={name:FILE_NAME,mimeType:'application/json',parents:[folderId],appProperties:{lumos:'settings-sync-v121',schema:'lumos.settings.sync.v2'}};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const res=await driveFetch(`${UPLOAD_ROOT}/files?uploadType=multipart&fields=id,name,modifiedTime,size`,{method:'POST',body:form},interactive);return await res.json()}
   async function updateCloudFile(fileId,payload,interactive=true){const res=await driveFetch(`${UPLOAD_ROOT}/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,name,modifiedTime,size`,{method:'PATCH',headers:{'Content-Type':'application/json; charset=UTF-8'},body:JSON.stringify(payload,null,2)},interactive);return await res.json()}
 
   async function inspectCloud(interactive=true){
@@ -32755,11 +32765,11 @@ body { min-height: 100dvh; }
       const folder=await ensureFolder(interactive,false);if(!folder)throw new Error('내 드라이브에 Rumos 폴더가 없습니다.');
       const file=await findSettingsFile(folder.id,interactive);if(!file)throw new Error('Rumos 폴더에 lumos-settings.json이 없습니다.');
       const payload=await readCloudFile(file.id,interactive);
-      if(!options.force){const ok=confirm(`클라우드 설정(${fmtTime(payload.updatedAtMs)})을 현재 기기에 적용할까요?\n\nAPI 키·NAI 토큰·인증정보와 참조 이미지는 현재 기기의 값을 유지합니다.`);if(!ok){setOperation('내려받기 취소');return false}}
-      const merged=mergeDownloadedSettings(payload.settings);state.applyingCloud=true;
-      try{for(const key of Object.keys(SETTINGS))delete SETTINGS[key];Object.assign(SETTINGS,merged);try{SETTINGS.customPromptModes=normalizeCustomPromptModes(SETTINGS.customPromptModes)}catch(_){}try{SETTINGS.promptStyle=normalizePromptModeKey(SETTINGS.promptStyle)}catch(_){}config.localChangedAt=Number(payload.updatedAtMs)||now();config.lastCloudChecksum=payload.checksum;config.lastCloudUpdatedAt=Number(payload.updatedAtMs)||0;config.lastSyncAt=now();config.folderId=folder.id;config.fileId=file.id;saveConfig();await Promise.resolve(window.saveSettings?.());refreshAfterDownload()}
+      if(!options.force){const legacy=payload.syncMode!=='full'&&payload.schema!=='lumos.settings.sync.v2';const note=legacy?'기존 v120 파일이라 클라우드에 없는 키·토큰은 현재 기기의 값을 유지합니다.':'API 키·프록시 토큰·NAI 토큰을 포함한 전체 설정이 현재 기기에 적용됩니다.';const ok=confirm(`클라우드 설정(${fmtTime(payload.updatedAtMs)})을 현재 기기에 적용할까요?\n\n${note}`);if(!ok){setOperation('내려받기 취소');return false}}
+      const merged=mergeDownloadedSettings(payload.settings,payload);state.applyingCloud=true;
+      try{for(const key of Object.keys(SETTINGS))delete SETTINGS[key];Object.assign(SETTINGS,merged);try{SETTINGS.customPromptModes=normalizeCustomPromptModes(SETTINGS.customPromptModes)}catch(_){}try{SETTINGS.promptStyle=normalizePromptModeKey(SETTINGS.promptStyle)}catch(_){}if(payload.syncConfig&&typeof payload.syncConfig==='object'){if(payload.syncConfig.clientId)config.clientId=String(payload.syncConfig.clientId);if(typeof payload.syncConfig.autoSync==='boolean')config.autoSync=payload.syncConfig.autoSync}config.localChangedAt=Number(payload.updatedAtMs)||now();config.lastCloudChecksum=payload.checksum;config.lastCloudUpdatedAt=Number(payload.updatedAtMs)||0;config.lastSyncAt=now();config.folderId=folder.id;config.fileId=file.id;saveConfig();await Promise.resolve(window.saveSettings?.());refreshAfterDownload()}
       finally{state.applyingCloud=false}
-      state.remote={folder,file,payload};setOperation('클라우드 설정 적용 완료');show('Drive 설정을 적용했어. API 키와 토큰은 이 기기의 값을 유지했어.');return true;
+      state.remote={folder,file,payload};setOperation('클라우드 설정 적용 완료');show(payload.syncMode==='full'||payload.schema==='lumos.settings.sync.v2'?'Drive 전체 설정을 적용했어. API 키와 토큰도 함께 복원했어.':'기존 v120 설정을 적용했어. 클라우드에 없던 키와 토큰은 현재 기기 값을 유지했어.');return true;
     }catch(e){setOperation(e.message,e);show(`설정 내려받기 실패 · ${e.message}`);return false}
     finally{state.busy=false;render()}
   }
@@ -32802,20 +32812,21 @@ body { min-height: 100dvh; }
   function installWrappers(){
     try{
       const previous=window.saveSettings;
-      if(typeof previous==='function'&&!previous.__driveSyncV120){const wrapped=function(){const result=previous.apply(this,arguments);if(!state.applyingCloud)scheduleAutoUpload();return result};wrapped.__driveSyncV120=true;window.saveSettings=wrapped;try{saveSettings=wrapped}catch(_){}}
-    }catch(e){console.warn('[Lumos v120] saveSettings wrapper failed',e)}
+      if(typeof previous==='function'&&!previous.__driveSyncV121){const wrapped=function(){const result=previous.apply(this,arguments);if(!state.applyingCloud)scheduleAutoUpload();return result};wrapped.__driveSyncV121=true;window.saveSettings=wrapped;try{saveSettings=wrapped}catch(_){}}
+    }catch(e){console.warn('[Lumos v121] saveSettings wrapper failed',e)}
     try{
       const previousOpen=window.openCoreModal;
-      if(typeof previousOpen==='function'&&!previousOpen.__driveSyncV120){const wrapped=function(){const r=previousOpen.apply(this,arguments);setTimeout(render,0);return r};wrapped.__driveSyncV120=true;window.openCoreModal=wrapped;try{openCoreModal=wrapped}catch(_){}}
+      if(typeof previousOpen==='function'&&!previousOpen.__driveSyncV121){const wrapped=function(){const r=previousOpen.apply(this,arguments);setTimeout(render,0);return r};wrapped.__driveSyncV121=true;window.openCoreModal=wrapped;try{openCoreModal=wrapped}catch(_){}}
     }catch(_){}
     try{
       const previousSwitch=window.switchCoreTab;
-      if(typeof previousSwitch==='function'&&!previousSwitch.__driveSyncV120){const wrapped=function(t){const r=previousSwitch.apply(this,arguments);if(t==='cloud')setTimeout(render,0);return r};wrapped.__driveSyncV120=true;window.switchCoreTab=wrapped;try{switchCoreTab=wrapped}catch(_){}}
+      if(typeof previousSwitch==='function'&&!previousSwitch.__driveSyncV121){const wrapped=function(t){const r=previousSwitch.apply(this,arguments);if(t==='cloud')setTimeout(render,0);return r};wrapped.__driveSyncV121=true;window.switchCoreTab=wrapped;try{switchCoreTab=wrapped}catch(_){}}
     }catch(_){}
   }
 
-  window.lumosDriveSyncV120={version:VERSION,state,config:()=>clone(config),render,connect,disconnect,inspect:()=>inspectCloud(true),upload:(force=false)=>uploadSettings({auto:false,force}),download:(force=false)=>downloadSettings({interactive:true,force}),buildPayload,status:()=>({connected:tokenValid(),folder:FOLDER_NAME,file:FILE_NAME,lastSyncAt:config.lastSyncAt,lastCloudChecksum:config.lastCloudChecksum,lastOperation:state.lastOperation,lastError:state.lastError})};
+  window.lumosDriveSyncV121={version:VERSION,state,config:()=>clone(config),render,connect,disconnect,inspect:()=>inspectCloud(true),upload:(force=false)=>uploadSettings({auto:false,force}),download:(force=false)=>downloadSettings({interactive:true,force}),buildPayload,mergeDownloadedSettings,status:()=>({connected:tokenValid(),folder:FOLDER_NAME,file:FILE_NAME,lastSyncAt:config.lastSyncAt,lastCloudChecksum:config.lastCloudChecksum,lastOperation:state.lastOperation,lastError:state.lastError})};
 
+  window.lumosDriveSyncV120=window.lumosDriveSyncV121;
   function init(){installWrappers();bindUi();render();if(config.autoSync&&config.everConnected)setOperation('자동 동기화 준비됨 · Google 연결 후 작동합니다.')}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
