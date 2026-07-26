@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <!-- Lumos v107: Gemini explicit cache bridge + universal Relay + v105 CHARX verified baseline -->
-<title>Lumos v2.4 · v122 Sync Repair</title>
+<title>Lumos v2.4 · v124 Secure OAuth Relay</title>
     <meta name="lumos-build" content="v122-sync-repair">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -3121,31 +3121,19 @@
                         </div>
                         <div id="core-tab-cloud" class="core-tab-content hidden space-y-4">
                             <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                                <div class="font-bold text-blue-800"><i class="fa-brands fa-google-drive mr-2" aria-hidden="true"></i>Google Drive 전체 설정 동기화 <span class="ml-1 text-[10px] font-black">v122</span></div>
+                                <div class="font-bold text-blue-800"><i class="fa-brands fa-google-drive mr-2" aria-hidden="true"></i>Google Drive 전체 설정 동기화 <span class="ml-1 text-[10px] font-black">v124</span></div>
                                 <p class="mt-1 text-xs leading-relaxed text-blue-700">동기화 위치는 <b>내 드라이브 / Rumos / lumos-settings.json</b>입니다. 모델·프롬프트·화면 테마·API 키·프록시 토큰·NAI 토큰을 포함한 전체 설정을 동기화합니다. 채팅과 이미지는 포함하지 않습니다.</p>
                             </div>
 
                             <div class="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-                                <label class="block">
-                                    <span class="mb-1 block text-sm font-bold text-gray-700">Google OAuth 웹 클라이언트 ID</span>
-                                    <input id="lumos-drive-client-id-v120" type="text" autocomplete="off" spellcheck="false" class="w-full rounded-lg border p-2 font-mono text-xs" placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com" aria-describedby="lumos-drive-client-id-help-v120">
-                                </label>
-                                <p id="lumos-drive-client-id-help-v120" class="text-xs leading-relaxed text-gray-500">GitHub Pages와 로컬 HTML 모두 같은 Lumos OAuth 클라이언트를 사용합니다.</p>
-
-                                <div id="lumos-drive-local-auth-fields-v122" class="hidden space-y-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
-                                    <div class="text-xs font-bold text-violet-800"><i class="fa-solid fa-file-code mr-1" aria-hidden="true"></i>로컬 HTML 연결용</div>
-                                    <label class="block">
-                                        <span class="mb-1 block text-xs font-bold text-gray-700">클라이언트 보안 비밀번호</span>
-                                        <input id="lumos-drive-client-secret-v122" type="password" autocomplete="off" spellcheck="false" class="w-full rounded-lg border p-2 font-mono text-xs" placeholder="Google Cloud의 클라이언트 보안 비밀번호">
-                                    </label>
-                                    <label class="block">
-                                        <span class="mb-1 block text-xs font-bold text-gray-700">승인된 리디렉션 URI</span>
-                                        <input id="lumos-drive-redirect-uri-v122" type="url" autocomplete="off" spellcheck="false" class="w-full rounded-lg border p-2 font-mono text-xs" value="https://schindler77.github.io/lumos/redirect.html">
-                                    </label>
-                                    <p class="text-[11px] leading-relaxed text-violet-700">Google Cloud의 Lumos 클라이언트에 위 URI를 <b>승인된 리디렉션 URI</b>로 등록하면, NAI Studio 방식처럼 로컬 HTML에서도 로그인 팝업으로 연결됩니다.</p>
+                                <div class="text-sm font-bold text-gray-800"><i class="fa-brands fa-google mr-2" aria-hidden="true"></i>Google 계정 연결</div>
+                                <p class="text-xs leading-relaxed text-gray-600">NAI Studio처럼 집 PC·휴대폰·회사 PC의 로컬 HTML과 GitHub Pages에서 모두 <b>Google 연결</b> 한 번으로 로그인합니다.</p>
+                                <p class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800"><b>보안 방식:</b> OAuth 클라이언트 보안 비밀번호는 HTML에 넣지 않고 사용자의 Lumos Universal Relay v2에만 Secret으로 보관합니다. HTML에는 공개 Worker 주소만 들어 있습니다.</p>
+                                <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700">
+                                    <div><b>OAuth Relay</b> · https://nomal-nomal.wkd1107wkd.workers.dev</div>
+                                    <div class="mt-1 break-all"><b>Google 승인 리디렉션 URI</b> · https://nomal-nomal.wkd1107wkd.workers.dev/oauth/callback</div>
                                 </div>
-
-                                <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">Drive의 <b>lumos-settings.json</b>에는 개인 API 키와 토큰이 포함됩니다. Google 로그인 토큰은 기기별로 따로 보관합니다.</p>
+                                <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">Drive의 <b>lumos-settings.json</b>에는 개인 API 키와 토큰이 포함됩니다. Google 로그인 갱신 토큰은 각 기기에만 따로 보관합니다.</p>
                                 <div id="lumos-drive-origin-v120" class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" role="status" aria-live="polite"></div>
                                 <div class="flex flex-wrap gap-2">
                                     <button id="lumos-drive-connect-v120" type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Google 연결</button>
@@ -18249,7 +18237,7 @@ function openSessionSettings(mode='new') {
         }
 
         async function persistImportedStateV122(importedDb, importedSettings, settingsOnly = false) {
-            window.__LUMOS_SETTINGS_IMPORTING_V122__ = true;
+            window.__LUMOS_SETTINGS_IMPORTING_V124__ = true;
             try {
                 if (window.__LUMOS_STORAGE_V119_BOOT__) await window.__LUMOS_STORAGE_V119_BOOT__;
                 if (!settingsOnly) {
@@ -18267,7 +18255,7 @@ function openSessionSettings(mode='new') {
                 applySettingsUiV122();
                 return true;
             } finally {
-                window.__LUMOS_SETTINGS_IMPORTING_V122__ = false;
+                window.__LUMOS_SETTINGS_IMPORTING_V124__ = false;
             }
         }
         window.persistImportedStateV122 = persistImportedStateV122;
@@ -32621,7 +32609,7 @@ body { min-height: 100dvh; }
 
 
 <!-- LUMOS_SECTION: Google Drive full settings sync (v122 repair) -->
-<style id="lumos-v122-drive-sync-style">
+<style id="lumos-v124-drive-sync-style">
   #core-tab-cloud button:disabled{opacity:.55;cursor:not-allowed}
   body.dark-mode #core-tab-cloud .bg-white{background:#111827!important}
   body.dark-mode #core-tab-cloud .bg-gray-50{background:#0f172a!important}
@@ -32633,30 +32621,28 @@ body { min-height: 100dvh; }
   body.dark-mode #core-tab-cloud .border-gray-200,
   body.dark-mode #core-tab-cloud .border-gray-300{border-color:#334155!important}
 </style>
-<script id="lumos-v122-drive-sync-script">
+<script id="lumos-v124-drive-sync-script">
 (function(){
   'use strict';
-  const FLAG='__LUMOS_DRIVE_SYNC_V122__';
+  const FLAG='__LUMOS_DRIVE_SYNC_V124__';
   if(window[FLAG]) return;
   window[FLAG]=true;
 
-  const VERSION=122;
-  const CONFIG_KEY='LUMOS_DRIVE_SYNC_V122_CONFIG';
-  const LEGACY_CONFIG_KEY='LUMOS_DRIVE_SYNC_V120_CONFIG';
+  const VERSION=124;
+  const CONFIG_KEY='LUMOS_DRIVE_SYNC_V124_CONFIG';
+  const LEGACY_CONFIG_KEY='LUMOS_DRIVE_SYNC_V122_CONFIG';
+  const LEGACY_CONFIG_KEYS=['LUMOS_DRIVE_SYNC_V123_CONFIG','LUMOS_DRIVE_SYNC_V122_CONFIG','LUMOS_DRIVE_SYNC_V120_CONFIG'];
   const DEVICE_KEY='LUMOS_DRIVE_SYNC_V120_DEVICE';
   const FOLDER_NAME='Rumos';
   const FILE_NAME='lumos-settings.json';
   const FOLDER_MIME='application/vnd.google-apps.folder';
-  const SCOPE='https://www.googleapis.com/auth/drive.file';
-  const GIS_URL='https://accounts.google.com/gsi/client';
-  const TOKEN_URL='https://oauth2.googleapis.com/token';
-  const REVOKE_URL='https://oauth2.googleapis.com/revoke';
   const API_ROOT='https://www.googleapis.com/drive/v3';
   const UPLOAD_ROOT='https://www.googleapis.com/upload/drive/v3';
-  const DEFAULT_REDIRECT='https://schindler77.github.io/lumos/redirect.html';
+  const OAUTH_RELAY_BASE='https://nomal-nomal.wkd1107wkd.workers.dev';
+  const OAUTH_RELAY_ORIGIN=new URL(OAUTH_RELAY_BASE).origin;
 
   const state={
-    accessToken:'',tokenExpiresAt:0,tokenClient:null,gisPromise:null,
+    accessToken:'',tokenExpiresAt:0,
     busy:false,autoTimer:0,applyingCloud:false,connected:false,
     remote:null,lastError:'',lastOperation:'대기 중',pendingOAuthState:''
   };
@@ -32674,15 +32660,21 @@ body { min-height: 100dvh; }
   function clone(value){try{return structuredClone(value)}catch(_){try{return JSON.parse(JSON.stringify(value))}catch(__){return value}}}
   function safeJson(raw,fallback){try{const v=JSON.parse(raw);return v&&typeof v==='object'?v:fallback}catch(_){return fallback}}
   function now(){return Date.now()}
-  function isLocalFile(){return location.protocol==='file:'||window.__LUMOS_FORCE_LOCAL_FILE_TEST__===true}
+  function isLocalFile(){return !/^https?:$/i.test(String(location.protocol||''))||window.__LUMOS_FORCE_LOCAL_FILE_TEST__===true}
   function deviceId(){let id='';try{id=localStorage.getItem(DEVICE_KEY)||''}catch(_){}if(!id){id=(crypto.randomUUID?crypto.randomUUID():`device-${Date.now()}-${Math.random().toString(36).slice(2)}`);try{localStorage.setItem(DEVICE_KEY,id)}catch(_){}}return id}
   function loadConfig(){
     let cfg={};
     try{cfg=safeJson(localStorage.getItem(CONFIG_KEY)||localStorage.getItem(LEGACY_CONFIG_KEY)||'{}',{})}catch(_){}
-    return Object.assign({clientId:'',clientSecret:'',redirectUri:DEFAULT_REDIRECT,refreshToken:'',autoSync:false,lastSyncAt:0,lastCloudChecksum:'',lastCloudUpdatedAt:0,localChangedAt:0,folderId:'',fileId:'',everConnected:false},cfg||{});
+    if(cfg&&typeof cfg==='object'){delete cfg.clientId;delete cfg.clientSecret;delete cfg.redirectUri;delete cfg.oauthMode}
+    return Object.assign({refreshToken:'',autoSync:false,lastSyncAt:0,lastCloudChecksum:'',lastCloudUpdatedAt:0,localChangedAt:0,folderId:'',fileId:'',everConnected:false,oauthMode:'worker-relay-v2'},cfg||{});
+  }
+  function purgeLegacyOAuthSecrets(){
+    try{for(const key of LEGACY_CONFIG_KEYS){const raw=localStorage.getItem(key);if(!raw)continue;const item=safeJson(raw,{});if(item&&typeof item==='object'&&Object.prototype.hasOwnProperty.call(item,'clientSecret')){delete item.clientSecret;localStorage.setItem(key,JSON.stringify(item))}}}catch(e){console.warn('[Lumos v124] legacy OAuth secret purge failed',e)}
   }
   let config=loadConfig();
-  function saveConfig(){try{localStorage.setItem(CONFIG_KEY,JSON.stringify(config))}catch(e){console.warn('[Lumos v122] sync config save failed',e)}}
+  config.oauthMode='worker-relay-v2';
+  purgeLegacyOAuthSecrets();
+  function saveConfig(){try{const clean=Object.assign({},config,{oauthMode:'worker-relay-v2'});delete clean.clientId;delete clean.clientSecret;delete clean.redirectUri;localStorage.setItem(CONFIG_KEY,JSON.stringify(clean))}catch(e){console.warn('[Lumos v124] sync config save failed',e)}}
   function show(msg){try{showMessage(msg)}catch(_){console.log(msg)}}
   function setOperation(msg,error){state.lastOperation=String(msg||'');state.lastError=error?String(error?.message||error):'';render()}
   function fmtTime(ms){if(!Number(ms))return '없음';try{return new Date(Number(ms)).toLocaleString('ko-KR')}catch(_){return String(ms)}}
@@ -32731,63 +32723,45 @@ body { min-height: 100dvh; }
 
   function buildPayload(){
     const settings=buildCloudSettings(),checksum=hashText(stableStringify(settings)),updatedAtMs=Number(config.localChangedAt)||now();
-    return {schema:'lumos.settings.sync.v3',syncMode:'full',containsCredentials:true,credentialCount:credentialCount(settings),app:'Lumos',version:VERSION,folder:FOLDER_NAME,file:FILE_NAME,updatedAt:new Date(updatedAtMs).toISOString(),updatedAtMs,updatedBy:deviceId(),origin:isLocalFile()?'file://':location.origin,checksum,syncConfig:{clientId:String(config.clientId||''),redirectUri:String(config.redirectUri||DEFAULT_REDIRECT),autoSync:!!config.autoSync},settings};
+    return {schema:'lumos.settings.sync.v3',syncMode:'full',containsCredentials:true,credentialCount:credentialCount(settings),app:'Lumos',version:VERSION,folder:FOLDER_NAME,file:FILE_NAME,updatedAt:new Date(updatedAtMs).toISOString(),updatedAtMs,updatedBy:deviceId(),origin:isLocalFile()?'file://':location.origin,checksum,syncConfig:{autoSync:!!config.autoSync,oauthMode:'worker-relay-v2'},settings};
   }
   function validatePayload(payload){if(!payload||!['lumos.settings.sync.v1','lumos.settings.sync.v2','lumos.settings.sync.v3'].includes(payload.schema)||!payload.settings||typeof payload.settings!=='object')throw new Error('Lumos 설정 동기화 파일 형식이 아닙니다.');const checksum=hashText(stableStringify(payload.settings));if(payload.checksum&&payload.checksum!==checksum)throw new Error('클라우드 설정 체크섬이 일치하지 않습니다.');payload.checksum=checksum;payload.credentialCount=credentialCount(payload.settings);return payload}
 
   function escapeQ(value){return String(value||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
-  async function ensureGis(){
-    if(window.google?.accounts?.oauth2)return true;if(state.gisPromise)return state.gisPromise;
-    state.gisPromise=new Promise((resolve,reject)=>{const existing=document.querySelector(`script[src="${GIS_URL}"]`);if(existing){const timer=setInterval(()=>{if(window.google?.accounts?.oauth2){clearInterval(timer);resolve(true)}},100);setTimeout(()=>{clearInterval(timer);reject(new Error('Google 로그인 라이브러리를 불러오지 못했습니다.'))},12000);return}const s=document.createElement('script');s.src=GIS_URL;s.async=true;s.defer=true;s.onload=()=>resolve(true);s.onerror=()=>reject(new Error('Google 로그인 라이브러리 로드 실패'));document.head.appendChild(s)});
-    return state.gisPromise;
-  }
   function tokenValid(){return !!state.accessToken&&now()<state.tokenExpiresAt-60000}
   function applyTokenResponse(resp){state.accessToken=String(resp?.access_token||'');state.tokenExpiresAt=now()+(Number(resp?.expires_in)||3500)*1000;if(resp?.refresh_token)config.refreshToken=String(resp.refresh_token);state.connected=!!state.accessToken;config.everConnected=state.connected||config.everConnected;saveConfig();render();return state.accessToken}
-  async function tokenPost(params){const res=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:new URLSearchParams(params)});const data=await res.json().catch(()=>({}));if(!res.ok||data.error)throw new Error(data.error_description||data.error||`Google 토큰 교환 실패 (${res.status})`);return data}
-  async function refreshCodeToken(){if(!config.refreshToken)throw new Error('저장된 Google 갱신 토큰이 없습니다.');const data=await tokenPost({client_id:String(config.clientId||''),client_secret:String(config.clientSecret||''),refresh_token:String(config.refreshToken),grant_type:'refresh_token'});return applyTokenResponse(data)}
-  async function exchangeCodeForToken(code,redirectUri){const data=await tokenPost({client_id:String(config.clientId||''),client_secret:String(config.clientSecret||''),code:String(code||''),redirect_uri:redirectUri,grant_type:'authorization_code'});return applyTokenResponse(data)}
-  function extractCode(raw){const text=String(raw||'').trim();if(!text)return '';try{const u=new URL(text);return u.searchParams.get('code')||''}catch(_){}const m=text.match(/[?&]code=([^&]+)/);return m?decodeURIComponent(m[1]):text}
-  function manualCodeFallback(authUrl,redirectUri,resolve,reject){
-    const raw=prompt('Google 로그인 팝업에서 인증이 끝났는데 자동으로 돌아오지 않았다면, 주소창의 전체 URL 또는 code 값을 붙여넣으세요.\n\n취소하면 연결을 중단합니다.');
-    if(!raw){reject(new Error('Google 연결이 취소되었습니다.'));return}
-    const code=extractCode(raw);if(!code){reject(new Error('인증 코드를 읽지 못했습니다.'));return}
-    exchangeCodeForToken(code,redirectUri).then(resolve,reject);
-  }
-  async function requestLocalCodeToken(){
-    const clientId=String(config.clientId||'').trim(),clientSecret=String(config.clientSecret||'').trim(),redirectUri=String(config.redirectUri||DEFAULT_REDIRECT).trim();
-    if(!clientId)throw new Error('Google OAuth 웹 클라이언트 ID를 입력해주세요.');
-    if(!clientSecret)throw new Error('로컬 HTML 연결에는 클라이언트 보안 비밀번호가 필요합니다.');
-    if(!/^https:\/\//i.test(redirectUri))throw new Error('승인된 리디렉션 URI는 https:// 주소여야 합니다.');
-    if(config.refreshToken){try{return await refreshCodeToken()}catch(e){console.warn('[Lumos v122] refresh token failed; new consent required',e);config.refreshToken='';saveConfig()}}
-    const oauthState=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`);state.pendingOAuthState=oauthState;
-    const auth=new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    auth.searchParams.set('client_id',clientId);auth.searchParams.set('redirect_uri',redirectUri);auth.searchParams.set('response_type','code');auth.searchParams.set('scope',SCOPE);auth.searchParams.set('access_type','offline');auth.searchParams.set('prompt','consent');auth.searchParams.set('state',oauthState);
-    const left=Math.max(0,screen.width/2-250),top=Math.max(0,screen.height/2-320);const popup=window.open(auth.toString(),'lumos_google_auth',`width=500,height=640,left=${left},top=${top}`);
+  async function oauthRelayPost(path,payload){const res=await fetch(`${OAUTH_RELAY_BASE}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload||{})});const data=await res.json().catch(()=>({}));if(!res.ok||data.ok===false)throw new Error(data.message||data.error||`OAuth Relay 오류 (${res.status})`);return data}
+  async function refreshRelayToken(){if(!config.refreshToken)throw new Error('저장된 Google 갱신 토큰이 없습니다.');const data=await oauthRelayPost('/oauth/refresh',{refresh_token:String(config.refreshToken)});return applyTokenResponse(data)}
+  function decodeBase64UrlUtf8(raw){let value=String(raw||'').trim().replace(/-/g,'+').replace(/_/g,'/');while(value.length%4)value+='=';const binary=atob(value),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new TextDecoder().decode(bytes)}
+  function parseManualTokenPackage(raw,expectedState){const text=String(raw||'').trim();if(!text)throw new Error('연결 코드가 비어 있습니다.');let data;try{data=JSON.parse(text)}catch(_){try{data=JSON.parse(decodeBase64UrlUtf8(text))}catch(__){throw new Error('연결 코드를 읽지 못했습니다.')}}if(data?.type!=='LUMOS_GOOGLE_AUTH_RESULT')throw new Error('Lumos Google 연결 코드가 아닙니다.');if(String(data.state||'')!==String(expectedState||''))throw new Error('Google OAuth state 검증에 실패했습니다.');if(!data.ok)throw new Error(data.error||'Google 연결에 실패했습니다.');if(!data.access_token)throw new Error('연결 코드에 액세스 토큰이 없습니다.');return data}
+  function manualTokenFallback(expectedState,resolve,reject){const raw=prompt('Google 로그인 창에서 자동으로 돌아오지 않았다면, 그 창의 “연결 코드 복사”를 누른 뒤 여기에 붙여넣으세요.\n\n취소하면 연결을 중단합니다.');if(!raw){reject(new Error('Google 연결이 취소되었습니다.'));return}try{resolve(applyTokenResponse(parseManualTokenPackage(raw,expectedState)))}catch(e){reject(e)}}
+  async function requestRelayOAuthToken(){
+    const oauthState=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9._~-]/g,'');state.pendingOAuthState=oauthState;
+    const auth=new URL(`${OAUTH_RELAY_BASE}/oauth/start`);auth.searchParams.set('state',oauthState);
+    const left=Math.max(0,(screen.width||1000)/2-250),top=Math.max(0,(screen.height||800)/2-320);const popup=window.open(auth.toString(),'lumos_google_auth',`width=500,height=680,left=${left},top=${top}`);
     if(!popup)throw new Error('Google 로그인 팝업이 차단되었습니다. 팝업을 허용하고 다시 눌러주세요.');
     return await new Promise((resolve,reject)=>{
-      let settled=false;const expectedOrigin=new URL(redirectUri).origin;
+      let settled=false,fallbackStarted=false;
       const cleanup=()=>{window.removeEventListener('message',onMessage);clearTimeout(timeout);clearInterval(closedCheck)};
-      const finishReject=e=>{if(settled)return;settled=true;cleanup();reject(e)};
-      const onMessage=async event=>{if(settled||event.origin!==expectedOrigin||event.data?.type!=='LUMOS_GOOGLE_AUTH')return;if(event.data.state&&event.data.state!==oauthState){finishReject(new Error('Google OAuth state 검증에 실패했습니다.'));return}if(event.data.error){finishReject(new Error(event.data.error));return}const code=String(event.data.code||'');if(!code){finishReject(new Error('인증 코드를 받지 못했습니다.'));return}settled=true;cleanup();try{resolve(await exchangeCodeForToken(code,redirectUri))}catch(e){reject(e)}};
+      const fail=e=>{if(settled)return;settled=true;cleanup();reject(e)};
+      const succeed=data=>{if(settled)return;settled=true;cleanup();try{resolve(applyTokenResponse(data))}catch(e){reject(e)}};
+      const startFallback=()=>{if(settled||fallbackStarted)return;fallbackStarted=true;cleanup();manualTokenFallback(oauthState,resolve,reject)};
+      const onMessage=event=>{if(settled||event.origin!==OAUTH_RELAY_ORIGIN||event.data?.type!=='LUMOS_GOOGLE_AUTH_RESULT')return;const data=event.data;if(String(data.state||'')!==oauthState){fail(new Error('Google OAuth state 검증에 실패했습니다.'));return}if(!data.ok){fail(new Error(data.error||'Google 연결에 실패했습니다.'));return}if(!data.access_token){fail(new Error('Google 액세스 토큰을 받지 못했습니다.'));return}succeed(data)};
       window.addEventListener('message',onMessage);
-      const closedCheck=setInterval(()=>{let closed=false;try{closed=!!popup.closed}catch(_){}if(closed&&!settled){cleanup();setTimeout(()=>manualCodeFallback(auth.toString(),redirectUri,resolve,reject),100)}},500);
-      const timeout=setTimeout(()=>{if(!settled){cleanup();manualCodeFallback(auth.toString(),redirectUri,resolve,reject)}},120000);
+      const closedCheck=setInterval(()=>{let closed=false;try{closed=!!popup.closed}catch(_){return}if(closed)startFallback()},500);
+      const timeout=setTimeout(startFallback,150000);
     });
   }
-  async function requestGisToken(){
-    const clientId=String(config.clientId||'').trim();if(!clientId)throw new Error('Google OAuth 웹 클라이언트 ID를 입력해주세요.');await ensureGis();
-    return await new Promise((resolve,reject)=>{state.tokenClient=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,include_granted_scopes:true,callback:resp=>{if(resp?.error){reject(new Error(resp.error_description||resp.error));return}resolve(applyTokenResponse(resp))},error_callback:err=>reject(new Error(err?.message||err?.type||'Google 연결 창이 닫혔습니다.'))});try{state.tokenClient.requestAccessToken({prompt:config.everConnected?'':'consent'})}catch(e){reject(e)}});
-  }
-  async function requestToken(interactive=true){if(tokenValid())return state.accessToken;if(!interactive)throw new Error('Google 재연결이 필요합니다.');return isLocalFile()?requestLocalCodeToken():requestGisToken()}
+  async function requestToken(interactive=true){if(tokenValid())return state.accessToken;if(config.refreshToken){try{return await refreshRelayToken()}catch(e){console.warn('[Lumos v124] refresh token failed; interactive login required',e);config.refreshToken='';saveConfig()}}if(!interactive)throw new Error('Google 재연결이 필요합니다.');return requestRelayOAuthToken()}
 
   async function driveFetch(url,options={},interactive=true,retry=true){const token=await requestToken(interactive);const headers=new Headers(options.headers||{});headers.set('Authorization',`Bearer ${token}`);const res=await fetch(url,Object.assign({},options,{headers}));if(res.status===401&&retry){state.accessToken='';state.tokenExpiresAt=0;state.connected=false;return driveFetch(url,options,interactive,false)}if(!res.ok){const body=await res.text().catch(()=>'');throw new Error(`Google Drive ${res.status}: ${body.slice(0,500)||res.statusText}`)}return res}
   async function listFiles(q,interactive=true){const p=new URLSearchParams({q,spaces:'drive',pageSize:'20',orderBy:'modifiedTime desc',fields:'files(id,name,mimeType,modifiedTime,createdTime,size,appProperties)'});const res=await driveFetch(`${API_ROOT}/files?${p}`,{},interactive);const data=await res.json();return Array.isArray(data.files)?data.files:[]}
   async function findFolder(interactive=true){const q=`name='${escapeQ(FOLDER_NAME)}' and mimeType='${FOLDER_MIME}' and 'root' in parents and trashed=false`;const files=await listFiles(q,interactive);return files[0]||null}
-  async function createFolder(interactive=true){const res=await driveFetch(`${API_ROOT}/files?fields=id,name,modifiedTime`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:FOLDER_NAME,mimeType:FOLDER_MIME,parents:['root'],appProperties:{lumos:'settings-sync-v122'}})},interactive);return await res.json()}
+  async function createFolder(interactive=true){const res=await driveFetch(`${API_ROOT}/files?fields=id,name,modifiedTime`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:FOLDER_NAME,mimeType:FOLDER_MIME,parents:['root'],appProperties:{lumos:'settings-sync-v124'}})},interactive);return await res.json()}
   async function ensureFolder(interactive=true,create=true){let folder=await findFolder(interactive);if(!folder&&create)folder=await createFolder(interactive);if(folder){config.folderId=folder.id;saveConfig()}return folder}
   async function findSettingsFile(folderId,interactive=true){if(!folderId)return null;const q=`name='${escapeQ(FILE_NAME)}' and '${escapeQ(folderId)}' in parents and trashed=false`;const files=await listFiles(q,interactive);return files[0]||null}
   async function readCloudFile(fileId,interactive=true){const res=await driveFetch(`${API_ROOT}/files/${encodeURIComponent(fileId)}?alt=media`,{},interactive);return validatePayload(await res.json())}
-  async function createCloudFile(folderId,payload,interactive=true){const meta={name:FILE_NAME,mimeType:'application/json',parents:[folderId],appProperties:{lumos:'settings-sync-v122',schema:'lumos.settings.sync.v3'}};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const res=await driveFetch(`${UPLOAD_ROOT}/files?uploadType=multipart&fields=id,name,modifiedTime,size`,{method:'POST',body:form},interactive);return await res.json()}
+  async function createCloudFile(folderId,payload,interactive=true){const meta={name:FILE_NAME,mimeType:'application/json',parents:[folderId],appProperties:{lumos:'settings-sync-v124',schema:'lumos.settings.sync.v3'}};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const res=await driveFetch(`${UPLOAD_ROOT}/files?uploadType=multipart&fields=id,name,modifiedTime,size`,{method:'POST',body:form},interactive);return await res.json()}
   async function updateCloudFile(fileId,payload,interactive=true){const res=await driveFetch(`${UPLOAD_ROOT}/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,name,modifiedTime,size`,{method:'PATCH',headers:{'Content-Type':'application/json; charset=UTF-8'},body:JSON.stringify(payload,null,2)},interactive);return await res.json()}
 
   async function inspectCloud(interactive=true){state.busy=true;setOperation('Rumos 폴더를 확인하는 중');try{const folder=await ensureFolder(interactive,true);if(!folder)throw new Error('Rumos 폴더를 만들 수 없습니다.');const file=await findSettingsFile(folder.id,interactive);let payload=null;if(file){payload=await readCloudFile(file.id,interactive);config.fileId=file.id}state.remote={folder,file,payload};state.connected=tokenValid();saveConfig();setOperation(file?(payload.checksum===buildPayload().checksum?'로컬과 클라우드 설정이 같습니다.':'클라우드 설정 파일을 확인했습니다.'):'클라우드 설정 파일이 아직 없습니다.');return state.remote}catch(e){setOperation(e.message,e);throw e}finally{state.busy=false;render()}}
@@ -32810,16 +32784,16 @@ body { min-height: 100dvh; }
 
   function refreshAfterDownload(){try{updateModelSelects?.()}catch(_){}try{applyFontSize?.(SETTINGS.fontSize||16)}catch(_){}try{applySidebarWidth?.()}catch(_){}try{initThemeAndFont?.()}catch(_){}try{applyDarkMode?.()}catch(_){}try{renderSidebar?.()}catch(_){}try{renderRightSidebar?.()}catch(_){}try{const modal=document.getElementById('core-modal');if(modal&&!modal.classList.contains('hidden')){openCoreModal();switchCoreTab('cloud')}}catch(_){}}
   async function applyDownloadedPayload(payload,meta={}){
-    const merged=mergeDownloadedSettings(payload.settings,payload);state.applyingCloud=true;window.__LUMOS_SETTINGS_IMPORTING_V122__=true;
+    const merged=mergeDownloadedSettings(payload.settings,payload);state.applyingCloud=true;window.__LUMOS_SETTINGS_IMPORTING_V124__=true;
     try{
       if(window.__LUMOS_STORAGE_V119_BOOT__)await window.__LUMOS_STORAGE_V119_BOOT__;
       for(const key of Object.keys(SETTINGS))delete SETTINGS[key];Object.assign(SETTINGS,merged);
       try{SETTINGS.customPromptModes=normalizeCustomPromptModes(SETTINGS.customPromptModes)}catch(_){}try{SETTINGS.promptStyle=normalizePromptModeKey(SETTINGS.promptStyle)}catch(_){}
-      if(payload.syncConfig&&typeof payload.syncConfig==='object'){if(payload.syncConfig.clientId)config.clientId=String(payload.syncConfig.clientId);if(payload.syncConfig.redirectUri)config.redirectUri=String(payload.syncConfig.redirectUri);if(typeof payload.syncConfig.autoSync==='boolean')config.autoSync=payload.syncConfig.autoSync}
+      if(payload.syncConfig&&typeof payload.syncConfig==='object'&&typeof payload.syncConfig.autoSync==='boolean')config.autoSync=payload.syncConfig.autoSync
       if(meta.folder){config.folderId=meta.folder.id||config.folderId}if(meta.file){config.fileId=meta.file.id||config.fileId}
       config.localChangedAt=Number(payload.updatedAtMs)||now();config.lastCloudChecksum=payload.checksum;config.lastCloudUpdatedAt=Number(payload.updatedAtMs)||0;config.lastSyncAt=now();saveConfig();
       const ok=await Promise.resolve(window.saveSettings?.());if(ok===false)throw new Error('내려받은 설정의 IndexedDB 저장 검증에 실패했습니다.');refreshAfterDownload();return true;
-    }finally{state.applyingCloud=false;window.__LUMOS_SETTINGS_IMPORTING_V122__=false}
+    }finally{state.applyingCloud=false;window.__LUMOS_SETTINGS_IMPORTING_V124__=false}
   }
   async function downloadSettings(options={}){
     const interactive=options.interactive!==false;state.busy=true;setOperation('클라우드 설정을 내려받는 중');
@@ -32830,38 +32804,36 @@ body { min-height: 100dvh; }
     }catch(e){setOperation(e.message,e);show(`설정 내려받기 실패 · ${e.message}`);return false}finally{state.busy=false;render()}
   }
 
-  function scheduleAutoUpload(){if(state.applyingCloud||window.__LUMOS_SETTINGS_IMPORTING_V122__||!config.autoSync)return;config.localChangedAt=now();saveConfig();clearTimeout(state.autoTimer);state.autoTimer=setTimeout(()=>uploadSettings({auto:true}),3000);render()}
-  async function connect(){readUiConfig();state.busy=true;setOperation('Google 계정 연결 중');try{await requestToken(true);state.connected=true;await inspectCloud(true);show(`Google Drive 연결 완료 · ${isLocalFile()?'로컬 HTML':'GitHub Pages'}에서 Rumos 폴더를 사용해.`);return true}catch(e){setOperation(e.message,e);show(`Google 연결 실패 · ${e.message}`);return false}finally{state.busy=false;render()}}
-  async function disconnect(){const token=state.accessToken;try{if(token)await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`,{method:'POST'}).catch(()=>{})}catch(_){}try{if(token&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(token,()=>{})}catch(_){}state.accessToken='';state.tokenExpiresAt=0;state.connected=false;state.remote=null;config.refreshToken='';saveConfig();setOperation('Google 연결 해제됨');render()}
-  function readUiConfig(){const client=document.getElementById('lumos-drive-client-id-v120'),secret=document.getElementById('lumos-drive-client-secret-v122'),redirect=document.getElementById('lumos-drive-redirect-uri-v122'),auto=document.getElementById('lumos-drive-auto-v120');if(client)config.clientId=String(client.value||'').trim();if(secret)config.clientSecret=String(secret.value||'').trim();if(redirect)config.redirectUri=String(redirect.value||DEFAULT_REDIRECT).trim()||DEFAULT_REDIRECT;if(auto)config.autoSync=!!auto.checked;saveConfig()}
+  function scheduleAutoUpload(){if(state.applyingCloud||window.__LUMOS_SETTINGS_IMPORTING_V124__||!config.autoSync)return;config.localChangedAt=now();saveConfig();clearTimeout(state.autoTimer);state.autoTimer=setTimeout(()=>uploadSettings({auto:true}),3000);render()}
+  async function connect(){readUiConfig();state.busy=true;setOperation('Google 계정 연결 중');try{await requestToken(true);state.connected=true;await inspectCloud(true);show('Google Drive 연결 완료 · PC·휴대폰·회사 PC 모두 같은 보안 OAuth Relay 방식으로 Rumos 폴더를 사용해.');return true}catch(e){setOperation(e.message,e);show(`Google 연결 실패 · ${e.message}`);return false}finally{state.busy=false;render()}}
+  async function disconnect(){const token=config.refreshToken||state.accessToken;try{if(token)await oauthRelayPost('/oauth/revoke',{token}).catch(()=>{})}catch(_){}state.accessToken='';state.tokenExpiresAt=0;state.connected=false;state.remote=null;config.refreshToken='';saveConfig();setOperation('Google 연결 해제됨');render()}
+  function readUiConfig(){const auto=document.getElementById('lumos-drive-auto-v120');if(auto)config.autoSync=!!auto.checked;config.oauthMode='worker-relay-v2';saveConfig()}
   function bindUi(){
-    const fields=[['lumos-drive-client-id-v120','change'],['lumos-drive-client-secret-v122','change'],['lumos-drive-redirect-uri-v122','change']];for(const [id] of fields){const el=document.getElementById(id);if(el&&!el.dataset.boundV122){el.dataset.boundV122='1';el.addEventListener('change',readUiConfig);el.addEventListener('blur',readUiConfig)}}
     const auto=document.getElementById('lumos-drive-auto-v120');if(auto&&!auto.dataset.boundV122){auto.dataset.boundV122='1';auto.addEventListener('change',()=>{readUiConfig();setOperation(config.autoSync?'자동 업로드 켜짐':'자동 업로드 꺼짐')})}
     const actions={'lumos-drive-connect-v120':()=>connect(),'lumos-drive-disconnect-v120':()=>disconnect(),'lumos-drive-upload-v120':()=>{readUiConfig();uploadSettings({auto:false})},'lumos-drive-download-v120':()=>downloadSettings({interactive:true}),'lumos-drive-inspect-v120':()=>inspectCloud(true).catch(e=>show(`클라우드 확인 실패 · ${e.message}`))};for(const [id,fn] of Object.entries(actions)){const el=document.getElementById(id);if(el&&!el.dataset.boundV122){el.dataset.boundV122='1';el.addEventListener('click',fn)}}
   }
   function render(){
-    bindUi();const client=document.getElementById('lumos-drive-client-id-v120'),secret=document.getElementById('lumos-drive-client-secret-v122'),redirect=document.getElementById('lumos-drive-redirect-uri-v122'),auto=document.getElementById('lumos-drive-auto-v120');if(client&&document.activeElement!==client)client.value=config.clientId||'';if(secret&&document.activeElement!==secret)secret.value=config.clientSecret||'';if(redirect&&document.activeElement!==redirect)redirect.value=config.redirectUri||DEFAULT_REDIRECT;if(auto)auto.checked=!!config.autoSync;
-    document.getElementById('lumos-drive-local-auth-fields-v122')?.classList.toggle('hidden',!isLocalFile());
-    const origin=document.getElementById('lumos-drive-origin-v120');if(origin){origin.textContent=isLocalFile()?'현재 실행: 로컬 HTML · NAI Studio 방식 OAuth 팝업 연결 지원':`현재 실행: ${location.origin} · Google Identity Services 연결`;origin.classList.remove('text-red-600')}
-    const auth=document.getElementById('lumos-drive-auth-status-v120');if(auth)auth.textContent=tokenValid()?'연결됨 (현재 탭)':(config.refreshToken&&isLocalFile()?'자동 재연결 가능':(config.everConnected?'재연결 필요':'연결 안 됨'));
+    bindUi();const auto=document.getElementById('lumos-drive-auto-v120');if(auto)auto.checked=!!config.autoSync;
+    const origin=document.getElementById('lumos-drive-origin-v120');if(origin){origin.textContent=`현재 실행: ${isLocalFile()?'로컬 HTML':location.origin} · Lumos Universal Relay v2 보안 OAuth`;origin.classList.remove('text-red-600')}
+    const auth=document.getElementById('lumos-drive-auth-status-v120');if(auth)auth.textContent=tokenValid()?'연결됨 (현재 탭)':(config.refreshToken?'자동 재연결 가능':(config.everConnected?'재연결 필요':'연결 안 됨'));
     const file=document.getElementById('lumos-drive-file-status-v120');if(file){const p=state.remote?.payload;file.textContent=p?`${FILE_NAME} · ${fmtTime(p.updatedAtMs)} · ${p.checksum}`:(state.remote?.file?FILE_NAME:'확인 전')}
     const localCount=document.getElementById('lumos-drive-local-secret-count-v122');if(localCount)localCount.textContent=`${credentialCount(buildCloudSettings())}개`;
     const cloudCount=document.getElementById('lumos-drive-cloud-secret-count-v122');if(cloudCount)cloudCount.textContent=state.remote?.payload?`${credentialCount(state.remote.payload.settings)}개`:'확인 전';
     const last=document.getElementById('lumos-drive-last-sync-v120');if(last)last.textContent=fmtTime(config.lastSyncAt);const op=document.getElementById('lumos-drive-operation-status-v120');if(op){op.textContent=state.lastOperation+(state.lastError?` · ${state.lastError}`:'');op.classList.toggle('text-red-600',!!state.lastError)}document.querySelectorAll('#core-tab-cloud button').forEach(btn=>btn.disabled=!!state.busy);
   }
   function installWrappers(){
-    try{const previous=window.saveSettings;if(typeof previous==='function'&&!previous.__driveSyncV122){const wrapped=function(){const result=previous.apply(this,arguments);if(!state.applyingCloud&&!window.__LUMOS_SETTINGS_IMPORTING_V122__)scheduleAutoUpload();return result};wrapped.__driveSyncV122=true;window.saveSettings=wrapped;try{saveSettings=wrapped}catch(_){}}}catch(e){console.warn('[Lumos v122] saveSettings wrapper failed',e)}
-    try{const previousOpen=window.openCoreModal;if(typeof previousOpen==='function'&&!previousOpen.__driveSyncV122){const wrapped=function(){const r=previousOpen.apply(this,arguments);setTimeout(render,0);return r};wrapped.__driveSyncV122=true;window.openCoreModal=wrapped;try{openCoreModal=wrapped}catch(_){}}}catch(_){}
-    try{const previousSwitch=window.switchCoreTab;if(typeof previousSwitch==='function'&&!previousSwitch.__driveSyncV122){const wrapped=function(t){const r=previousSwitch.apply(this,arguments);if(t==='cloud')setTimeout(render,0);return r};wrapped.__driveSyncV122=true;window.switchCoreTab=wrapped;try{switchCoreTab=wrapped}catch(_){}}}catch(_){}
+    try{const previous=window.saveSettings;if(typeof previous==='function'&&!previous.__driveSyncV124){const wrapped=function(){const result=previous.apply(this,arguments);if(!state.applyingCloud&&!window.__LUMOS_SETTINGS_IMPORTING_V124__)scheduleAutoUpload();return result};wrapped.__driveSyncV124=true;window.saveSettings=wrapped;try{saveSettings=wrapped}catch(_){}}}catch(e){console.warn('[Lumos v124] saveSettings wrapper failed',e)}
+    try{const previousOpen=window.openCoreModal;if(typeof previousOpen==='function'&&!previousOpen.__driveSyncV124){const wrapped=function(){const r=previousOpen.apply(this,arguments);setTimeout(render,0);return r};wrapped.__driveSyncV124=true;window.openCoreModal=wrapped;try{openCoreModal=wrapped}catch(_){}}}catch(_){}
+    try{const previousSwitch=window.switchCoreTab;if(typeof previousSwitch==='function'&&!previousSwitch.__driveSyncV124){const wrapped=function(t){const r=previousSwitch.apply(this,arguments);if(t==='cloud')setTimeout(render,0);return r};wrapped.__driveSyncV124=true;window.switchCoreTab=wrapped;try{switchCoreTab=wrapped}catch(_){}}}catch(_){}
   }
 
-  window.lumosDriveSyncV122={version:VERSION,state,config:()=>clone(config),render,connect,disconnect,inspect:()=>inspectCloud(true),upload:(force=false)=>uploadSettings({auto:false,force}),download:(force=false)=>downloadSettings({interactive:true,force}),buildPayload,mergeDownloadedSettings,credentialCount,_testApplyPayload:payload=>applyDownloadedPayload(validatePayload(clone(payload)),{}),_testSetConfig:patch=>{Object.assign(config,patch||{});saveConfig();render()},status:()=>({connected:tokenValid(),localFile:isLocalFile(),folder:FOLDER_NAME,file:FILE_NAME,lastSyncAt:config.lastSyncAt,lastCloudChecksum:config.lastCloudChecksum,lastOperation:state.lastOperation,lastError:state.lastError,localCredentialCount:credentialCount(buildCloudSettings()),cloudCredentialCount:state.remote?.payload?credentialCount(state.remote.payload.settings):null})};
-  window.lumosDriveSyncV121=window.lumosDriveSyncV122;window.lumosDriveSyncV120=window.lumosDriveSyncV122;
+  window.lumosDriveSyncV124={version:VERSION,state,config:()=>clone(config),render,connect,disconnect,inspect:()=>inspectCloud(true),upload:(force=false)=>uploadSettings({auto:false,force}),download:(force=false)=>downloadSettings({interactive:true,force}),buildPayload,mergeDownloadedSettings,credentialCount,_testApplyPayload:payload=>applyDownloadedPayload(validatePayload(clone(payload)),{}),_testSetConfig:patch=>{Object.assign(config,patch||{});saveConfig();render()},_testParseManualToken:(raw,stateValue)=>parseManualTokenPackage(raw,stateValue),status:()=>({connected:tokenValid(),localFile:isLocalFile(),oauthMode:'worker-relay-v2',oauthRelay:OAUTH_RELAY_BASE,folder:FOLDER_NAME,file:FILE_NAME,lastSyncAt:config.lastSyncAt,lastCloudChecksum:config.lastCloudChecksum,lastOperation:state.lastOperation,lastError:state.lastError,localCredentialCount:credentialCount(buildCloudSettings()),cloudCredentialCount:state.remote?.payload?credentialCount(state.remote.payload.settings):null})};
+  window.lumosDriveSyncV123=window.lumosDriveSyncV124;window.lumosDriveSyncV122=window.lumosDriveSyncV124;window.lumosDriveSyncV121=window.lumosDriveSyncV124;window.lumosDriveSyncV120=window.lumosDriveSyncV124;
   function init(){installWrappers();bindUi();render();if(config.autoSync&&config.everConnected)setOperation('자동 동기화 준비됨 · Google 연결 후 작동합니다.')}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
 </script>
 
-<script>window.LUMOS_PATCH_VERSION="v122";</script>
+<script>window.LUMOS_PATCH_VERSION="v124";</script>
 </body>
 </html>
