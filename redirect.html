@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lumos Google 로그인</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+    main{width:min(88vw,420px);padding:28px;border:1px solid #334155;border-radius:16px;background:#111827;text-align:center;box-shadow:0 22px 60px rgba(0,0,0,.4)}
+    h1{font-size:20px;margin:0 0 10px}p{font-size:13px;line-height:1.6;color:#94a3b8}.ok{color:#34d399}.bad{color:#f87171}
+  </style>
+</head>
+<body>
+<main><h1 id="title">Google 로그인 처리 중</h1><p id="message">Lumos로 인증 결과를 전달하고 있습니다.</p></main>
+<script>
+(()=>{
+  const q=new URLSearchParams(location.search),code=q.get('code')||'',error=q.get('error')||'',state=q.get('state')||'';
+  const title=document.getElementById('title'),message=document.getElementById('message');
+  if(error){title.textContent='Google 로그인 실패';title.className='bad';message.textContent=error;}
+  else if(!code){title.textContent='인증 코드 없음';title.className='bad';message.textContent='Google에서 인증 코드를 받지 못했습니다.';}
+  else if(window.opener){
+    window.opener.postMessage({type:'LUMOS_GOOGLE_AUTH',code,state},'*');
+    title.textContent='Google 로그인 완료';title.className='ok';message.textContent='Lumos로 돌아갑니다. 이 창은 곧 닫힙니다.';setTimeout(()=>window.close(),900);
+  }else{title.textContent='인증 코드를 복사하세요';message.textContent=location.href;}
+})();
+</script>
+</body>
+</html>
