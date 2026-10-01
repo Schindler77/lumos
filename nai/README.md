@@ -1,0 +1,65 @@
+# NAI Prompt Generator
+
+자연어 요청을 받아 NAI 프롬프트를 만드는 브라우저 앱입니다. 데이터는 이 브라우저에만 저장됩니다(로컬 우선).
+설계 기준은 「NAI Prompt Generator 제작 지시서 v1.0」입니다.
+
+## 실행
+
+빌드 과정이 없습니다. 다음 중 편한 방법으로 여세요.
+
+- `nai/index.html`을 브라우저로 바로 열기 (`file://`)
+- GitHub Pages 등 정적 호스팅: `https://<계정>.github.io/lumos/nai/`
+- 로컬 서버: `npx serve nai`
+
+처음 열면 아래 순서로 설정합니다.
+
+1. **설정 › API / 프록시**: 모델 ID와 API URL을 넣습니다. LM Studio나 Ollama처럼 로컬에서 도는 서버는 API 키를 비워 두면 됩니다.
+2. **설정 › 참조 데이터**: `content.csv`를 업로드합니다. 22만 행 파일을 넣어도 화면이 멈추지 않으며, 인덱스를 만드는 데 2~4초쯤 걸립니다.
+3. **설정 › 프롬프트**: 갖고 있는 지시사항(`지시사항.txt`)을 붙여 넣거나 불러온 뒤 저장합니다. 처음 들어 있는 내용은 임시 기본값입니다.
+4. **설정 › 하단 [연결 테스트]**: CORS, 인증, 모델, 스트리밍 상태를 하나씩 확인합니다.
+
+## 동작 순서
+
+```
+입력 → 대화 맥락 정리(직전 완성 프롬프트 우선)
+     → Query Planner: 한국어 요청을 영어 검색 키워드(JSON)로 변환, 짧은 API 호출 1회, 화면에 표시 안 함
+     → 로컬 CSV 검색 (exact → alias → prefix → token → substring → fuzzy, 같은 순위면 usage_count 순)
+     → 최종 요청: [System Prompt 원문] + [REFERENCE TAG CANDIDATES] + 최근 대화 + 현재 요청
+     → API / 프록시 / 로컬 호출 (SSE 스트리밍)
+     → 로컬 검증(경고만 표시) → 저장
+```
+
+- CSV 전체는 API로 보내지 않습니다. 검색에 걸린 후보(기본 최대 150개)만 보냅니다.
+- 참조 CSV가 없으면 Planner 호출을 건너뛰고 바로 생성합니다.
+- 프록시를 켜면 프록시 URL로 요청하고, `Authorization: Bearer <프록시 토큰>`과 `X-Lumos-Proxy-Token` 헤더를 붙입니다. 이 방식은 Lumos 본체와 같습니다. 원본 API 키는 "원본 API 키도 전달"을 켰을 때만 보냅니다.
+- API 키가 비어 있으면 `Authorization` 헤더를 아예 넣지 않습니다. 빈 `Bearer `는 보내지 않습니다.
+- 브라우저의 `fetch`가 실패하면 `no-cors` 요청을 한 번 더 보냅니다. 서버가 응답하면 `CORS_BLOCKED`, 응답이 없으면 `NETWORK_ERROR`로 분류합니다. 인증 오류(`AUTH_FAILED`)와 섞이지 않습니다.
+
+## 파일 구조
+
+| 파일 | 역할 |
+|---|---|
+| `index.html` | 화면 구조와 다크 테마 CSS |
+| `js/tag-engine.js` | CSV 파서와 검색 인덱스. Blob Web Worker 안에서 실행 |
+| `js/reference.js` | 워커 래퍼. 워커를 쓸 수 없는 환경에서는 메인 스레드로 대체 |
+| `js/core.js` | 엔드포인트·인증, 요청 body, SSE, 오류 분류, 맥락 조립, Planner, 검증, 지시사항 점검 |
+| `js/storage.js` | IndexedDB 저장소 (settings / chats / reference) |
+| `js/app.js` | UI와 생성 파이프라인 |
+| `tests/` | 단위 테스트, 모의 서버, 브라우저 E2E |
+
+## 테스트
+
+```bash
+cd nai
+npm test                                  # 단위 테스트 (node:test)
+NODE_PATH=$(npm root -g) npm run e2e      # Playwright E2E: 지시서 §28 T01~T10 (합성 CSV 221,787행)
+npm run mock                              # 수동 확인용 모의 서버
+                                          #   앱 http://localhost:8080 · API http://127.0.0.1:8081/v1 · 모델 ID mock-model
+```
+
+## 알아둘 점
+
+- **토큰 수는 추정치입니다.** 일반 Chat Completions API로는 NAI 토크나이저를 쓸 수 없어 정확한 값을 낼 수 없습니다. 화면에도 "추정치"로 표시합니다. 지시사항에 `code_execution`으로 토큰을 세라는 문구가 있으면 [지시사항 점검]이 경고합니다.
+- **지시사항 점검은 경고만 합니다.** NAI 버전 표기가 서로 다른 경우 등을 알려 주지만, 원문은 고치지 않습니다.
+- **Thinking Level / Budget은 공급자를 알아볼 수 있을 때만 보냅니다.** 모델 ID로 Gemini나 Claude임이 드러날 때만 해당 형식으로 전송하고, 나머지 공급자에는 보내지 않습니다. 그 밖의 필드는 "추가 body JSON"에 직접 넣으세요.
+- **API 키와 프록시 토큰의 보관과 노출**: 두 값은 IndexedDB에 저장됩니다. 화면에서는 기본적으로 가려지고, 콘솔·오류 메시지·디버그 표시에는 나오지 않습니다. 설정을 내보낼 때도 기본으로 빠집니다.

@@ -1,0 +1,11 @@
+{
+  "name": "nai-prompt-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NAI 프롬프트 생성 전용 로컬 우선 대화형 도구",
+  "scripts": {
+    "test": "node --test tests/tag-engine.test.js tests/core.test.js",
+    "e2e": "node tests/e2e.js",
+    "mock": "node tests/mock-server.js"
+  }
+}
