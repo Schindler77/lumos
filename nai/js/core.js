@@ -36,6 +36,10 @@
     '- 같은 의미의 태그를 중복하지 않습니다.',
     '- 등장인물이 2명 이상이면 공통 장면은 Base Prompt에, 인물별 묘사는 Character Prompt로 나누어 씁니다.',
     '',
+    '[이미지 분석]',
+    '- 이미지가 첨부되면 보이는 요소(인원, 캐릭터 외형, 복장, 표정, 자세·동작, 구도·시점, 배경, 조명, 화풍)를 태그로 옮깁니다.',
+    '- 이미지에서 확인할 수 없는 요소는 지어내지 않습니다. 인물이 2명 이상이면 아래 다인 형식을 따릅니다.',
+    '',
     '[수정 요청]',
     '- 직전에 완성한 프롬프트가 있고 사용자가 일부 수정을 요청하면, 요청한 부분만 바꾸고 나머지 태그와 순서는 그대로 유지합니다.',
     '',
@@ -98,6 +102,14 @@
       perKeyword: 10,
       maxTotal: 150,
       includeInputTerms: true
+    },
+    vision: {
+      maxSide: 1536,
+      quality: 0.9,
+      detail: '',
+      plannerImages: true,
+      resendHistoryImages: false,
+      maxImages: 4
     },
     context: {
       maxTurns: 12,
@@ -309,10 +321,17 @@
   }
 
   // §11 호환 옵션: system 위치 / 역할 교대 / user 시작
+  function hasContent(c) { return typeof c === 'string' ? c !== '' : Array.isArray(c) && c.length > 0; }
+  function toParts(c) { return Array.isArray(c) ? c.slice() : [{ type: 'text', text: String(c) }]; }
+  function joinContent(a, b) {
+    if (typeof a === 'string' && typeof b === 'string') return a + '\n\n' + b;
+    return toParts(a).concat(toParts(b));
+  }
+
   function normalizeMessages(msgs, g) {
     g = g || {};
-    var list = msgs.filter(function (m) { return m && typeof m.content === 'string' && m.content !== ''; })
-      .map(function (m) { return { role: m.role, content: m.content }; });
+    var list = msgs.filter(function (m) { return m && hasContent(m.content); })
+      .map(function (m) { return { role: m.role, content: Array.isArray(m.content) ? m.content.slice() : m.content }; });
     var systems = list.filter(function (m) { return m.role === 'system'; });
     var rest = list.filter(function (m) { return m.role !== 'system'; });
     var out;
@@ -332,12 +351,43 @@
       var merged = [];
       out.forEach(function (m) {
         var last = merged[merged.length - 1];
-        if (last && last.role === m.role && m.role !== 'system') last.content += '\n\n' + m.content;
+        if (last && last.role === m.role && m.role !== 'system') last.content = joinContent(last.content, m.content);
         else merged.push({ role: m.role, content: m.content });
       });
       out = merged;
     }
     return out;
+  }
+
+  // ───────────────────────── 이미지 입력 (비전) ─────────────────────────
+  // OpenAI-compatible content parts: [{type:'text'}, {type:'image_url', image_url:{url:'data:...'}}]
+  function buildUserContent(text, images, vision) {
+    var imgs = (images || []).filter(function (i) { return i && i.dataUrl; });
+    if (!imgs.length) return text;
+    var detail = vision && vision.detail;
+    var parts = [{ type: 'text', text: text && String(text).trim() ? text : '(이미지 첨부)' }];
+    imgs.forEach(function (i) {
+      var iu = { url: i.dataUrl };
+      if (detail) iu.detail = detail;
+      parts.push({ type: 'image_url', image_url: iu });
+    });
+    return parts;
+  }
+
+  function imageNote(n) { return '[첨부 이미지 ' + n + '장 — 이번 요청에는 다시 보내지 않음]'; }
+
+  function contentText(c) {
+    if (typeof c === 'string') return c;
+    if (!Array.isArray(c)) return '';
+    return c.filter(function (p) { return p && p.type === 'text'; }).map(function (p) { return p.text; }).join('\n');
+  }
+
+  function countImages(messages) {
+    var n = 0;
+    (messages || []).forEach(function (m) {
+      if (Array.isArray(m.content)) m.content.forEach(function (p) { if (p && p.type === 'image_url') n++; });
+    });
+    return n;
   }
 
   // ───────────────────────── 오류 ─────────────────────────
@@ -356,7 +406,8 @@
     REFERENCE_FILE_PARSE_ERROR: '참조 CSV 파일을 해석하지 못했습니다.',
     EMPTY_RESPONSE: '모델이 빈 응답을 반환했습니다.',
     CANCELLED: '사용자가 생성을 중지했습니다.',
-    CONFIG_ERROR: '설정을 확인하세요.'
+    CONFIG_ERROR: '설정을 확인하세요.',
+    VISION_UNSUPPORTED: '이 모델 또는 서버가 이미지 입력을 지원하지 않는 것 같습니다.\n비전 모델을 선택하거나 이미지를 빼고 보내세요.'
   };
 
   function mkErr(code, message, extra) {
@@ -380,9 +431,13 @@
     return t.slice(0, 300);
   }
 
-  function classifyHttpError(status, bodyText) {
+  function classifyHttpError(status, bodyText, opts) {
     var msg = extractErrorMessage(bodyText);
     var lower = (msg + ' ' + String(bodyText || '').slice(0, 2000)).toLowerCase();
+    if (opts && opts.hasImages && (status === 400 || status === 413 || status === 415 || status === 422 || status === 500) &&
+        /image|vision|multimodal|multi-modal|image_url|mm_|clip|mmproj/.test(lower)) {
+      return mkErr('VISION_UNSUPPORTED', ERROR_TEXT.VISION_UNSUPPORTED, { status: status, detail: msg });
+    }
     var modelHint = /model/.test(lower) && /(not[ _]?found|does not exist|doesn't exist|unknown|invalid|no such|not available|unsupported|not supported|access)/.test(lower);
     var code;
     if (status === 401 || status === 403) code = 'AUTH_FAILED';
@@ -527,7 +582,8 @@
         text: '', reasoning: '', finishReason: '', malformed: 0, usage: null, streamed: false,
         endpointKind: target.endpointKind, credentialLabel: target.credentialLabel,
         hostKind: target.hostKind, timings: timings, notes: built.notes.concat(target.warnings),
-        requestBodyKeys: Object.keys(built.body)
+        requestBodyKeys: Object.keys(built.body),
+        imageCount: countImages(msgs)
       };
       function abortError(partialText) {
         var e = reason === 'timeout' ? mkErr('TIMEOUT') : mkErr('CANCELLED');
@@ -544,7 +600,7 @@
         result.status = res.status;
         if (!res.ok) {
           return res.text().catch(function () { return ''; }).then(function (t) {
-            var e = classifyHttpError(res.status, t);
+            var e = classifyHttpError(res.status, t, { hasImages: result.imageCount > 0 });
             e.detail = redact(e.detail, secrets);
             e.bodyText = redact(String(t).slice(0, 2000), secrets);
             throw e;
@@ -667,18 +723,20 @@
     '- 10 to 40 keywords. Short Danbooru-style phrases in lowercase, e.g. "leaning on desk", "head down", "school uniform".',
     '- Cover what applies: number of people, character and series names (official romanized / English spelling), hair, eyes, body, clothing, expression, pose and action, camera angle and framing, background and location, lighting and mood.',
     '- If the request edits a previous prompt, focus on what changes and on tags needed for the change.',
+    '- If images are attached, base the keywords on what is actually visible in them (people count, character traits, clothing, expression, pose, framing, background, lighting, art style).',
     '- Do not write the final prompt.'
   ].join('\n');
 
-  function buildPlannerMessages(input, ctx) {
+  function buildPlannerMessages(input, ctx, images, vision) {
     ctx = ctx || {};
     var parts = [];
     if (ctx.previousPrompt) parts.push('Previous final prompt:\n<<<\n' + String(ctx.previousPrompt).slice(0, 2500) + '\n>>>');
     if (ctx.recentRequests && ctx.recentRequests.length) {
       parts.push('Earlier requests in this conversation:\n' + ctx.recentRequests.slice(-3).map(function (r) { return '- ' + String(r).slice(0, 300); }).join('\n'));
     }
-    parts.push('Current request:\n' + input);
-    return [{ role: 'system', content: PLANNER_SYSTEM }, { role: 'user', content: parts.join('\n\n') }];
+    var imgs = (images || []).filter(function (i) { return i && i.dataUrl; });
+    parts.push('Current request:\n' + (String(input || '').trim() || '(no text)') + (imgs.length ? '\n(' + imgs.length + ' image(s) attached)' : ''));
+    return [{ role: 'system', content: PLANNER_SYSTEM }, { role: 'user', content: buildUserContent(parts.join('\n\n'), imgs, vision) }];
   }
 
   function cleanKeywords(list, max) {
@@ -780,6 +838,13 @@
     });
     var last = turns[turns.length - 1];
     var previousPrompt = last ? last.assistant.content : '';
+    var vision = o.vision || {};
+    function userContent(m, current) {
+      var imgs = m.images || [];
+      if (!imgs.length) return m.content;
+      if (current || vision.resendHistoryImages) return buildUserContent(m.content, imgs, vision);
+      return (m.content ? m.content + '\n' : '') + imageNote(imgs.length);
+    }
 
     // 최신 턴부터 역순 채움. 직전 완성 프롬프트가 있는 마지막 턴은 예산과 무관하게 항상 포함.
     var picked = [];
@@ -795,10 +860,10 @@
     var messages = [{ role: 'system', content: o.systemPrompt || '' }];
     if (o.referenceBlock) messages.push({ role: 'system', content: o.referenceBlock });
     picked.forEach(function (tt) {
-      messages.push({ role: 'user', content: tt.user.content });
+      messages.push({ role: 'user', content: userContent(tt.user, false) });
       messages.push({ role: 'assistant', content: tt.assistant.content });
     });
-    messages.push({ role: 'user', content: o.input });
+    messages.push({ role: 'user', content: userContent({ content: o.input, images: o.images }, true) });
 
     return {
       messages: messages,
@@ -807,7 +872,8 @@
       includedTurns: picked.length,
       droppedTurns: turns.length - picked.length,
       historyChars: used,
-      recentRequests: turns.slice(-3).map(function (t) { return t.user.content; })
+      recentRequests: turns.slice(-3).map(function (t) { return t.user.content || (t.user.images && t.user.images.length ? '(image only)' : ''); }),
+      imageCount: countImages(messages)
     };
   }
 
@@ -991,7 +1057,7 @@
   // 대화 제목 (별도 API 호출 없이)
   function makeTitle(input) {
     var s = String(input || '').replace(/\s+/g, ' ').trim();
-    if (!s) return '새 대화';
+    if (!s) return arguments[1] ? '이미지 분석' : '새 대화';
     var chars = Array.from(s);
     return chars.length > 28 ? chars.slice(0, 28).join('') + '…' : s;
   }
@@ -1006,6 +1072,7 @@
     resolveApiUrl: resolveApiUrl, modelsUrlFrom: modelsUrlFrom, stripBearer: stripBearer,
     resolveTarget: resolveTarget, autoTokenParam: autoTokenParam, providerOf: providerOf,
     buildBody: buildBody, parseExtraBody: parseExtraBody, normalizeMessages: normalizeMessages,
+    buildUserContent: buildUserContent, contentText: contentText, countImages: countImages,
     mkErr: mkErr, classifyHttpError: classifyHttpError, extractErrorMessage: extractErrorMessage,
     redact: redact, secretsOf: secretsOf, diagnoseFetchFailure: diagnoseFetchFailure,
     createSSEParser: createSSEParser, parseCompletionJSON: parseCompletionJSON, callChat: callChat,

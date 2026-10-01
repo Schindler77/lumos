@@ -9,6 +9,7 @@
  *   /nocors/v1/chat/completions  CORS 헤더 없음 → 브라우저에서 CORS_BLOCKED
  *   /auth/v1/chat/completions    Bearer good-key 필요
  *   /proxy/v1/chat/completions   X-Lumos-Proxy-Token: ptok 필요
+ *   /novision/v1/chat/completions 이미지가 들어오면 400 (비전 미지원 모델 흉내)
  *
  * 사용자 메시지에 SLOW 가 있으면 느린 스트림을 보낸다 (취소 테스트).
  */
@@ -37,19 +38,27 @@ function createServers(opts) {
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   }
 
+  function txt(c) { return Array.isArray(c) ? c.filter((p) => p.type === 'text').map((p) => p.text).join('\n') : String(c || ''); }
+  function hasImage(body) { return (body.messages || []).some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url')); }
+
   function plannerReply(body) {
-    const user = body.messages.map((m) => m.content).join('\n');
+    const user = body.messages.map((m) => txt(m.content)).join('\n');
     let kws = ['1girl', 'solo'];
     if (/책상|엎드려/.test(user)) kws = kws.concat(['desk', 'leaning on desk', 'head down', 'bent arms', 'arms on table', 'upper body']);
     if (/복장/.test(user)) kws = kws.concat(['school uniform', 'shirt']);
     if (/해변/.test(user)) kws = kws.concat(['beach', 'lying']);
+    if (hasImage(body)) kws = ['2girls', 'beach', 'sunset', 'silver hair', 'black hair', 'lying', 'sitting'];
     return { choices: [{ message: { role: 'assistant', content: '```json\n' + JSON.stringify({ keywords: kws }) + '\n```' }, finish_reason: 'stop' }] };
   }
 
   function finalText(body) {
     const sys = body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
     const hasRef = sys.includes('[REFERENCE TAG CANDIDATES]');
-    const last = body.messages[body.messages.length - 1].content;
+    const lastMsg = body.messages[body.messages.length - 1];
+    const last = txt(lastMsg.content);
+    if (Array.isArray(lastMsg.content) && lastMsg.content.some((p) => p.type === 'image_url')) {
+      return '[Base Prompt]\n2girls, beach, sunset, outdoors\n[Character Prompt 1]\ngirl, silver hair, lying, smile\n[Character Prompt 2]\ngirl, black hair, sitting';
+    }
     const prev = body.messages.filter((m) => m.role === 'assistant').pop();
     if (/복장/.test(last) && prev) return prev.content.replace(/\n.*$/, '').replace('[NAI 프롬프트]', '[NAI 프롬프트]') + '\n1girl, solo, school uniform, head down, leaning on table';
     return '[NAI 프롬프트]\n1girl, solo, ' + (hasRef ? 'leaning on table, head down, arms on table' : 'desk') + ', upper body, indoors';
@@ -86,6 +95,7 @@ function createServers(opts) {
       let body = {};
       try { body = JSON.parse(raw); } catch (_) {}
       const rec = { url, headers: req.headers, body, rawLength: raw.length };
+      rec.images = (body.messages || []).reduce((n, m) => n + (Array.isArray(m.content) ? m.content.filter((p) => p.type === 'image_url').length : 0), 0);
       log.push(rec);
       if (url.startsWith('/auth/') && req.headers.authorization !== 'Bearer good-key') {
         res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -109,9 +119,14 @@ function createServers(opts) {
         res.end(JSON.stringify(plannerReply(body)));
         return;
       }
-      const last = (body.messages || []).slice(-1)[0] || { content: '' };
-      const slow = /SLOW/.test(last.content);
-      const text = /ping|OK/.test(last.content) ? 'OK' : finalText(body);
+      if (url.startsWith('/novision/') && hasImage(body)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Model does not support image input (image_url)' } }));
+        return;
+      }
+      const lastText = txt(((body.messages || []).slice(-1)[0] || { content: '' }).content);
+      const slow = /SLOW/.test(lastText);
+      const text = /main color/.test(lastText) ? 'Red' : /ping|OK/.test(lastText) ? 'OK' : finalText(body);
       if (body.stream) sse(res, slow ? 'a, '.repeat(400) : text, slow ? 40 : 5);
       else {
         res.writeHead(200, { 'Content-Type': 'application/json' });

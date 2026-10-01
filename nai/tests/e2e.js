@@ -193,6 +193,59 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     check('T03 원본 API 키 미전송', !JSON.stringify(pf.headers).includes('sk-upstream-zzz'));
     check('T03 원본 URL 헤더 보존', pf.headers['x-lumos-upstream-url'] === 'https://api.example.com/v1/chat/completions');
 
+    // 이미지 분석 (비전) — 첨부 → Planner/최종 요청에 이미지 → 후속 수정은 이미지 재전송 없음
+    await page.click('#btn-new-chat');
+    await configure(page, { url: srv.apiBase + '/v1' });
+    const pngPath = path.join(os.tmpdir(), 'nai-e2e-image.png');
+    const pngData = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 2400; c.height = 1200; const g = c.getContext('2d'); g.fillStyle = '#3a6'; g.fillRect(0, 0, 2400, 1200); g.fillStyle = '#fc0'; g.fillRect(200, 200, 600, 600); return c.toDataURL('image/png'); });
+    fs.writeFileSync(pngPath, Buffer.from(pngData.split(',')[1], 'base64'));
+    await page.setInputFiles('#img-file', pngPath);
+    await page.waitForSelector('#attach-tray .att img');
+    const attTitle = await page.getAttribute('#attach-tray .att', 'title');
+    check('이미지 첨부 + 축소(긴 변 1536)', /1536×768/.test(attTitle), attTitle);
+    srv.log.length = 0;
+    await send(page, '이 이미지를 Base / Character 프롬프트로 각각 분석해줘');
+    const vPlan = srv.log.find((r) => r.kind === 'planner');
+    const vFinal = srv.log.find((r) => r.kind === 'final');
+    check('비전: Planner에 이미지 전송', vPlan && vPlan.images === 1);
+    const vLast = vFinal.body.messages[vFinal.body.messages.length - 1];
+    check('비전: 최종 요청에 image_url(JPEG) 포함', Array.isArray(vLast.content) && vLast.content[1].type === 'image_url' && /^data:image\/jpeg;base64,/.test(vLast.content[1].image_url.url));
+    const vSys = vFinal.body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+    check('비전: 이미지 키워드로 CSV 후보 검색', vSys.includes('beach | cat=0'));
+    const vOut = await (await lastAssistant(page)).locator('.result-body').innerText();
+    check('비전: Base / Character 프롬프트 출력', vOut.includes('[Base Prompt]') && vOut.includes('[Character Prompt 2]'));
+    check('비전: 사용자 메시지에 썸네일', (await page.locator('.msg.user .thumb img').count()) === 1);
+    await page.screenshot({ path: path.join(shotDir, '10-vision.png') });
+    await page.click('.msg.user .thumb');
+    check('비전: 썸네일 클릭 시 크게 보기', await page.evaluate(() => document.getElementById('lightbox').open));
+    await page.click('#lightbox');
+    srv.log.length = 0;
+    await send(page, '표정만 바꿔줘');
+    const vF2 = srv.log.find((r) => r.kind === 'final');
+    check('비전: 후속 수정은 이미지 재전송 없음 + 직전 프롬프트 유지', vF2.images === 0 && vF2.body.messages.some((m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('첨부 이미지 1장')) && vF2.body.messages.some((m) => m.role === 'assistant' && m.content.includes('[Base Prompt]')));
+
+    // 이미지만 붙여넣기 (글 없음) → 새 대화 제목 "이미지 분석"
+    await page.click('#btn-new-chat');
+    await page.evaluate((d) => {
+      const bin = atob(d.split(',')[1]); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer(); dt.items.add(new File([u8], 'pasted.png', { type: 'image/png' }));
+      const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      document.getElementById('input').dispatchEvent(ev);
+    }, pngData);
+    await page.waitForSelector('#attach-tray .att img');
+    const before2 = await page.locator('.msg.assistant').count();
+    await page.press('#input', 'Enter');
+    await page.waitForFunction((n) => document.querySelectorAll('.msg.assistant').length > n && !document.querySelector('.status-line .spinner'), before2);
+    check('비전: 붙여넣기 이미지만 전송 + 제목 "이미지 분석"', (await page.textContent('#chat-title')) === '이미지 분석' && (await (await lastAssistant(page)).locator('.result-body').count()) === 1);
+
+    // 비전 미지원 모델 → VISION_UNSUPPORTED
+    await configure(page, { url: srv.apiBase + '/novision/v1' });
+    await page.setInputFiles('#img-file', pngPath);
+    await page.waitForSelector('#attach-tray .att img');
+    await send(page, '분석해줘');
+    const vErr = await (await lastAssistant(page)).locator('.err-card').innerText();
+    check('비전: 미지원 모델 → VISION_UNSUPPORTED', vErr.includes('VISION_UNSUPPORTED'), vErr.split('\n')[0]);
+
     // 연결 테스트 (로컬, 정상)
     await configure(page, { url: srv.apiBase + '/v1' });
     await openSettings(page, 'api');
@@ -208,6 +261,7 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     await page.waitForFunction(() => !document.querySelector('#diag-out .spinner'), null, { timeout: 30000 });
     const diag = await page.innerText('#diag-out');
     check('모델 진단 실행', diag.includes('system role 허용') && diag.includes('max_tokens'));
+    check('모델 진단: 비전 지원 확인', diag.includes('이미지 입력(비전) 지원'));
 
     // 권장 설정 점검
     await page.click('#btn-reco');
@@ -231,7 +285,8 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     const chatCount = await page.locator('.chat-item').count();
     await page.reload();
     await page.waitForFunction(() => /행$/.test(document.getElementById('ref-status').textContent), null, { timeout: 30000 });
-    check('새로고침 후 대화·참조 CSV 유지', (await page.locator('.chat-item').count()) === chatCount && chatCount === 2);
+    check('새로고침 후 대화·참조 CSV 유지', (await page.locator('.chat-item').count()) === chatCount && chatCount === 4);
+    check('새로고침 후 첨부 이미지 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('chats').objectStore('chats').getAll(); g.onsuccess = () => res(g.result.some((c) => c.messages.some((m) => m.images && m.images[0] && /^data:image\/jpeg/.test(m.images[0].dataUrl)))); }; })));
     check('새로고침 후 설정 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('kv').objectStore('kv').get('settings'); g.onsuccess = () => res(g.result.api.modelId === 'mock-model'); }; })));
 
     // 대화방 이름 변경 / 삭제

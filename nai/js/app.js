@@ -19,6 +19,7 @@
     refMeta: null,
     gen: null,            // { chatId, assistantId, controller, phase }
     plannerCache: new Map(),
+    attachments: [],      // 입력창에 첨부된 이미지 (전송 전)
     draft: null,
     dirty: false,
     tab: 'prompt'
@@ -227,7 +228,8 @@
     var L = [];
     if (d.model) L.push('model: ' + d.model);
     if (d.endpointKind) L.push('endpoint: ' + d.endpointKind + (d.hostKind ? ' (' + d.hostKind + ')' : '') + ' · auth: ' + (d.credentialLabel || '-'));
-    if (d.planner) L.push('planner: ' + d.planner);
+    if (d.images) L.push('첨부 이미지: ' + d.images + (d.sentImages != null ? ' · 이번 요청에 전송 ' + d.sentImages + '장' : ''));
+    if (d.planner) L.push('planner: ' + d.planner + (d.plannerNote ? ' · ' + d.plannerNote : ''));
     if (d.keywords) L.push('검색 키워드 (' + d.keywords.length + '): ' + d.keywords.join(', '));
     if (d.candidateCount != null) L.push('CSV 후보: ' + d.candidateCount + '개' + (d.searchMs != null ? ' · 검색 ' + d.searchMs + 'ms' : ''));
     if (d.context) L.push('맥락: ' + d.context);
@@ -242,7 +244,15 @@
   }
 
   function renderMessage(chat, m) {
-    if (m.role === 'user') return el('div', { class: 'msg user', 'data-mid': m.id }, el('div', { class: 'bubble', text: m.content }));
+    if (m.role === 'user') {
+      var imgs = m.images || [];
+      return el('div', { class: 'msg user', 'data-mid': m.id }, el('div', { class: 'bubble' + (imgs.length ? ' has-img' : '') },
+        imgs.length ? el('div', { class: 'msg-imgs' }, imgs.map(function (im) {
+          return el('button', { class: 'thumb', type: 'button', title: (im.name || '이미지') + ' · ' + im.width + '×' + im.height, onclick: function () { openLightbox(im.dataUrl); } },
+            el('img', { src: im.dataUrl, alt: im.name || '첨부 이미지', loading: 'lazy' }));
+        })) : null,
+        m.content ? el('div', { class: 'bubble-text', text: m.content }) : null));
+    }
 
     var wrap = el('div', { class: 'msg assistant', 'data-mid': m.id });
     var last = isLastAssistant(chat, m);
@@ -292,7 +302,7 @@
     if (m.status === 'error' && m.error) {
       var row = el('div', { class: 'row' });
       if (last) row.append(el('button', { class: 'act', type: 'button', disabled: busy, onclick: function () { regenerate(chat.id, m.id); } }, icon('redo'), '다시 시도'));
-      if (/CONFIG_ERROR|AUTH_FAILED|CORS_BLOCKED|MIXED_CONTENT|ENDPOINT_NOT_FOUND|MODEL_NOT_FOUND|NETWORK_ERROR/.test(m.error.code)) {
+      if (/CONFIG_ERROR|AUTH_FAILED|CORS_BLOCKED|MIXED_CONTENT|ENDPOINT_NOT_FOUND|MODEL_NOT_FOUND|NETWORK_ERROR|VISION_UNSUPPORTED/.test(m.error.code)) {
         row.append(el('button', { class: 'act', type: 'button', onclick: function () { openSettings('api'); } }, icon('gear'), '설정 열기'));
       }
       wrap.append(el('div', { class: 'err-card', role: 'alert' },
@@ -396,10 +406,10 @@
       hint.textContent = S.gen.chatId === S.currentId ? '생성 중 · ■ 버튼으로 중지' : '다른 대화에서 생성 중입니다 · ■ 버튼으로 중지';
     } else {
       btn.classList.remove('stop');
-      btn.disabled = !$('input').value.trim();
+      btn.disabled = !$('input').value.trim() && !S.attachments.length;
       btn.replaceChildren(icon('up'));
       btn.title = '전송 (Enter)'; btn.setAttribute('aria-label', '전송');
-      hint.textContent = 'Enter 전송 · Shift+Enter 줄바꿈';
+      hint.textContent = S.attachments.some(function (a) { return a.pending; }) ? '이미지 준비 중…' : 'Enter 전송 · Shift+Enter 줄바꿈 · 이미지는 클립 버튼·붙여넣기·끌어다 놓기';
     }
   }
 
@@ -407,25 +417,110 @@
     if (e) e.preventDefault();
     if (S.gen) { S.gen.controller.abort(); return; }
     var text = $('input').value.trim();
-    if (!text) return;
+    if (S.attachments.some(function (a) { return a.pending; })) return;
+    var images = S.attachments.filter(function (a) { return a.dataUrl; }).map(function (a) {
+      return { id: a.id, name: a.name, mime: a.mime, width: a.width, height: a.height, bytes: a.bytes, dataUrl: a.dataUrl };
+    });
+    if (!text && !images.length) return;
     $('input').value = '';
+    S.attachments = [];
+    renderAttachments();
     autoGrow();
     lsSet(draftKey(), '');
-    send(text);
+    send(text, images);
+  }
+
+  // ───────────────────────── 이미지 첨부 ─────────────────────────
+  function loadImage(file) {
+    if (window.createImageBitmap) return createImageBitmap(file).catch(function () { return loadImageEl(file); });
+    return loadImageEl(file);
+  }
+  function loadImageEl(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () { resolve(img); setTimeout(function () { URL.revokeObjectURL(url); }, 0); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('이미지를 읽지 못했습니다.')); };
+      img.src = url;
+    });
+  }
+
+  // 보내기 전에 긴 변을 줄이고 JPEG로 변환 (원본은 저장하지 않음)
+  function processImage(file) {
+    var vs = S.settings.vision || {};
+    var maxSide = Math.min(4096, Math.max(256, Number(vs.maxSide) || 1536));
+    var quality = Math.min(1, Math.max(0.5, Number(vs.quality) || 0.9));
+    return loadImage(file).then(function (img) {
+      var w = img.width, h = img.height;
+      if (!w || !h) throw new Error('이미지 크기를 알 수 없습니다.');
+      var sc = Math.min(1, maxSide / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * sc)), ch = Math.max(1, Math.round(h * sc));
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var g = canvas.getContext('2d');
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, cw, ch);
+      g.drawImage(img, 0, 0, cw, ch);
+      if (img.close) img.close();
+      var dataUrl = canvas.toDataURL('image/jpeg', quality);
+      return { name: file.name || 'image', mime: 'image/jpeg', width: cw, height: ch, origWidth: w, origHeight: h, bytes: Math.round((dataUrl.length - 23) * 3 / 4), dataUrl: dataUrl };
+    });
+  }
+
+  function addImageFiles(files) {
+    var list = Array.prototype.slice.call(files || []).filter(function (f) { return f && /^image\//.test(f.type); });
+    if (!list.length) return false;
+    var max = Math.max(1, Number((S.settings.vision || {}).maxImages) || 4);
+    var room = max - S.attachments.length;
+    if (room <= 0) { alert('이미지는 메시지당 최대 ' + max + '장까지 첨부할 수 있습니다.'); return true; }
+    if (list.length > room) alert('메시지당 최대 ' + max + '장까지라 ' + room + '장만 첨부합니다.');
+    list.slice(0, room).forEach(function (f) {
+      var a = { id: uid(), name: f.name || 'image', pending: true };
+      S.attachments.push(a);
+      processImage(f).then(function (r) {
+        Object.assign(a, r); a.pending = false;
+      }, function (e) {
+        S.attachments = S.attachments.filter(function (x) { return x !== a; });
+        alert('이미지를 첨부하지 못했습니다: ' + (e && e.message || e));
+      }).then(function () { renderAttachments(); updateComposer(); });
+    });
+    renderAttachments();
+    updateComposer();
+    return true;
+  }
+
+  function renderAttachments() {
+    var tray = $('attach-tray');
+    tray.hidden = !S.attachments.length;
+    tray.replaceChildren.apply(tray, S.attachments.map(function (a) {
+      var rm = el('button', { class: 'att-x', type: 'button', title: '첨부 제거', 'aria-label': (a.name || '이미지') + ' 첨부 제거', onclick: function () {
+        S.attachments = S.attachments.filter(function (x) { return x !== a; }); renderAttachments(); updateComposer(); $('input').focus();
+      } }, icon('x'));
+      return el('div', { class: 'att' + (a.pending ? ' pending' : ''), title: a.pending ? '처리 중…' : a.name + ' · ' + a.width + '×' + a.height + ' · ' + fmtBytes(a.bytes) },
+        a.pending ? el('span', { class: 'spinner' }) : el('img', { src: a.dataUrl, alt: a.name }), rm);
+    }));
+  }
+
+  function openLightbox(src) {
+    var d = $('lightbox');
+    d.querySelector('img').src = src;
+    if (d.showModal) d.showModal(); else d.setAttribute('open', '');
   }
 
   // ───────────────────────── 생성 파이프라인 ─────────────────────────
-  function send(text) {
+  function send(text, images) {
+    images = images || [];
     var chat = currentChat();
     var now = Date.now();
     if (!chat) {
-      chat = { id: uid(), title: C.makeTitle(text), createdAt: now, updatedAt: now, messages: [], lastFinalPrompt: '', lastFinalPromptMsgId: null };
+      chat = { id: uid(), title: C.makeTitle(text, images.length), createdAt: now, updatedAt: now, messages: [], lastFinalPrompt: '', lastFinalPromptMsgId: null };
       S.chats.set(chat.id, chat);
       S.currentId = chat.id;
       lsSet('nai:current', chat.id);
       lsSet('nai:draft:new', '');
     }
     var userMsg = { id: uid(), role: 'user', content: text, createdAt: now };
+    if (images.length) userMsg.images = images;
     chat.messages.push(userMsg);
     chat.updatedAt = now;
     var asst = { id: uid(), role: 'assistant', content: '', status: 'streaming', replyTo: userMsg.id, createdAt: now };
@@ -464,18 +559,27 @@
     chat.lastFinalPrompt = ''; chat.lastFinalPromptMsgId = null;
   }
 
-  var FATAL_FOR_MAIN = { CONFIG_ERROR: 1, AUTH_FAILED: 1, CORS_BLOCKED: 1, NETWORK_ERROR: 1, MIXED_CONTENT: 1, ENDPOINT_NOT_FOUND: 1, MODEL_NOT_FOUND: 1 };
+  var FATAL_FOR_MAIN = { CONFIG_ERROR: 1, AUTH_FAILED: 1, CORS_BLOCKED: 1, NETWORK_ERROR: 1, MIXED_CONTENT: 1, ENDPOINT_NOT_FOUND: 1, MODEL_NOT_FOUND: 1, VISION_UNSUPPORTED: 1 };
 
-  function planKeywords(input, ctx, signal, dbg) {
+  function planKeywords(input, ctx, signal, dbg, images) {
     var pl = S.settings.planner;
     if (!pl.enabled) { dbg.planner = '꺼짐'; return Promise.resolve([]); }
     var model = String(pl.modelId || '').trim() || S.settings.api.modelId;
-    var key = C.hashString(model + '\u0001' + input + '\u0001' + (ctx.previousPrompt || ''));
+    var vision = S.settings.vision || {};
+    var imgs = vision.plannerImages ? (images || []) : [];
+    var key = C.hashString(model + '\u0001' + input + '\u0001' + (ctx.previousPrompt || '') + '\u0001' + imgs.map(function (i) { return i.id; }).join(','));
     if (S.plannerCache.has(key)) { dbg.planner = '캐시 사용'; return Promise.resolve(S.plannerCache.get(key)); }
     var t0 = Date.now();
-    return C.callChat({
-      settings: S.settings, messages: C.buildPlannerMessages(input, ctx), stream: false,
-      maxTokens: Number(pl.maxTokens) || 600, modelId: model, signal: signal, pageProtocol: location.protocol
+    function call(withImages) {
+      return C.callChat({
+        settings: S.settings, messages: C.buildPlannerMessages(input, ctx, withImages, vision), stream: false,
+        maxTokens: Number(pl.maxTokens) || 600, modelId: model, signal: signal, pageProtocol: location.protocol
+      });
+    }
+    return call(imgs).catch(function (e) {
+      // Planner 모델만 비전 미지원이면 텍스트만으로 다시 시도
+      if (e.code === 'VISION_UNSUPPORTED' && imgs.length && model !== S.settings.api.modelId) { dbg.plannerNote = 'Planner 모델 비전 미지원 → 텍스트만 사용'; return call([]); }
+      throw e;
     }).then(function (r) {
       var parsed = C.parsePlannerOutput(r.text);
       dbg.planner = (parsed.ok ? 'JSON ' : (r.text.trim() ? 'JSON 아님(복구) ' : '빈 응답 ')) + parsed.keywords.length + '개 · ' + (Date.now() - t0) + 'ms';
@@ -505,6 +609,8 @@
     var idx = chat.messages.indexOf(userMsg);
     var history = chat.messages.slice(0, idx);
     var input = userMsg.content;
+    var images = userMsg.images || [];
+    if (images.length) dbg.images = images.length + '장 · ' + fmtBytes(images.reduce(function (a, i) { return a + (i.bytes || 0); }, 0)) + ' · ' + images.map(function (i) { return i.width + '×' + i.height; }).join(', ');
     var pre = C.assembleContext({ history: history, input: input, context: settings.context });
 
     var job = Promise.resolve().then(function () {
@@ -517,7 +623,7 @@
       if (cachedKeywords && cachedKeywords.length) { dbg.planner = '이전 턴 키워드 재사용'; return cachedKeywords; }
       var refReady = S.engine.state.status === 'ready' || S.engine.state.status === 'loading';
       if (!refReady) { dbg.planner = '참조 CSV 없음 — 건너뜀'; return []; }
-      return planKeywords(input, { previousPrompt: pre.previousPrompt, recentRequests: pre.recentRequests }, controller.signal, dbg);
+      return planKeywords(input, { previousPrompt: pre.previousPrompt, recentRequests: pre.recentRequests }, controller.signal, dbg, images);
     }).then(function (planned) {
       if (controller.signal.aborted) throw C.mkErr('CANCELLED');
       dbg.keywordsRaw = planned;
@@ -543,8 +649,9 @@
       var ctx = C.assembleContext({
         systemPrompt: settings.systemPrompt,
         referenceBlock: C.formatReferenceBlock(cands),
-        history: history, input: input, context: settings.context
+        history: history, input: input, images: images, vision: settings.vision, context: settings.context
       });
+      dbg.sentImages = ctx.imageCount;
       dbg.context = '대화 ' + ctx.includedTurns + '턴 포함' + (ctx.droppedTurns ? ' · ' + ctx.droppedTurns + '턴 생략' : '') + (ctx.previousPrompt ? ' · 직전 완성 프롬프트 포함' : '');
       setPhase(chat, asst, 'generate');
       return C.callChat({
@@ -800,6 +907,8 @@
     s.retrieval.perKeyword = Math.min(50, Math.max(1, Math.floor(s.retrieval.perKeyword) || 10));
     s.retrieval.maxTotal = Math.min(500, Math.max(10, Math.floor(s.retrieval.maxTotal) || 150));
     s.planner.maxTokens = Math.max(64, Math.floor(s.planner.maxTokens) || 600);
+    s.vision.maxSide = Math.min(4096, Math.max(256, Math.floor(s.vision.maxSide) || 1536));
+    s.vision.maxImages = Math.min(10, Math.max(1, Math.floor(s.vision.maxImages) || 4));
     s.context.maxTurns = Math.max(1, Math.floor(s.context.maxTurns) || 12);
     s.context.charBudget = Math.max(1000, Math.floor(s.context.charBudget) || 24000);
     S.settings = s;
@@ -943,7 +1052,7 @@
     var s = readForm();
     var t = C.resolveTarget(s, {});
     if (t.error) { var d0 = diagStart('모델 진단'); d0.step('fail', t.error.message); d0.end(); return; }
-    if (!confirm('실제 API를 7~8회 짧게 호출해 호환성을 확인합니다. 계속할까요?')) return;
+    if (!confirm('실제 API를 8~9회 짧게 호출해 호환성을 확인합니다. 계속할까요?')) return;
     var d = diagStart('모델 진단');
     var base = C.clone(s);
     var g = base.generation;
@@ -988,6 +1097,16 @@
         return tryCall('reasoning', { overrides: { reasoning_effort: 'low' } }).then(function (x) {
           d.step(x.ok ? 'ok' : 'info', 'reasoning_effort 필드 ' + (x.ok ? '허용' : '거부 — Reasoning Effort를 비워 두세요'), x.ok ? null : errLine(x.e));
           rec.reasoningSupported = x.ok;
+        });
+      }).then(function () {
+        // 이미지 입력: 빨간 단색 이미지를 보내 색을 맞히는지 확인
+        var cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+        var cg = cv.getContext('2d'); cg.fillStyle = '#e01010'; cg.fillRect(0, 0, 64, 64);
+        var content = C.buildUserContent('What is the main color of this image? Answer with one English word.', [{ dataUrl: cv.toDataURL('image/png') }], s.vision);
+        return tryCall('vision', { messages: [{ role: 'user', content: content }], maxTokens: undefined }).then(function (x) {
+          if (x.ok && /red/i.test(x.r.text)) d.step('ok', '이미지 입력(비전) 지원 — 색상 인식 확인');
+          else if (x.ok) d.step('warn', '이미지 입력은 받지만 내용을 인식하지 못한 것 같습니다', '응답: ' + (x.r.text || '(비어 있음)').slice(0, 80) + ' — 서버가 이미지를 무시했을 수 있습니다.');
+          else d.step('info', '이미지 입력 미지원 — 이미지 분석에는 비전 모델이 필요합니다', errLine(x.e));
         });
       }).then(function () {
         if (t.endpointKind === 'proxy' || !String(s.api.apiKey || '').trim()) {
@@ -1129,6 +1248,27 @@
       }
     });
     input.addEventListener('input', function () { autoGrow(); updateComposer(); saveDraftSoon(); });
+    input.addEventListener('paste', function (e) {
+      var files = e.clipboardData && e.clipboardData.files;
+      if (files && files.length && addImageFiles(files)) {
+        if (!(e.clipboardData.getData('text/plain') || '').trim()) e.preventDefault();
+      }
+    });
+    $('btn-attach').addEventListener('click', function () { $('img-file').click(); });
+    $('img-file').addEventListener('change', function () { addImageFiles(this.files); this.value = ''; input.focus(); });
+    var main = document.querySelector('.main');
+    var dragDepth = 0;
+    function hasFiles(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1; }
+    main.addEventListener('dragenter', function (e) { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('composer').classList.add('drop'); });
+    main.addEventListener('dragover', function (e) { if (hasFiles(e)) e.preventDefault(); });
+    main.addEventListener('dragleave', function () { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('composer').classList.remove('drop'); });
+    main.addEventListener('drop', function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); dragDepth = 0; $('composer').classList.remove('drop');
+      if (!addImageFiles(e.dataTransfer.files)) alert('이미지 파일만 첨부할 수 있습니다.');
+    });
+    var lb = $('lightbox');
+    lb.addEventListener('click', function () { lb.close(); });
     window.addEventListener('beforeunload', saveDraftNow);
 
     $('btn-new-chat').addEventListener('click', newChat);

@@ -392,6 +392,7 @@ test('lintSystemPrompt: 버전 충돌과 code_execution 경고, 원문 불변', 
   assert.ok(r.some((x) => /정확한 토큰/.test(x.message)));
   assert.equal(sp, copy);
   assert.equal(C.lintSystemPrompt(C.DEFAULT_SYSTEM_PROMPT).filter((x) => x.level === 'warn').length, 0);
+  assert.equal(C.makeTitle('', 1), '이미지 분석');
 });
 
 test('checkRecommended', () => {
@@ -414,4 +415,76 @@ test('exportSettings: 기본은 키 제외', () => {
   assert.equal(e.proxy.token, '');
   assert.equal(C.exportSettings(s, true).api.apiKey, 'sk-1');
   assert.equal(s.api.apiKey, 'sk-1');
+});
+
+// ───────── 이미지 입력 (비전) ─────────
+const IMG = { id: 'i1', dataUrl: 'data:image/jpeg;base64,AAAA', width: 10, height: 10 };
+
+test('buildUserContent: 이미지 없으면 문자열, 있으면 content parts', () => {
+  assert.equal(C.buildUserContent('hi', []), 'hi');
+  const c = C.buildUserContent('분석해줘', [IMG], { detail: '' });
+  assert.deepEqual(c, [{ type: 'text', text: '분석해줘' }, { type: 'image_url', image_url: { url: IMG.dataUrl } }]);
+  assert.equal(C.buildUserContent('', [IMG], { detail: 'low' })[1].image_url.detail, 'low');
+  assert.equal(C.buildUserContent('', [IMG])[0].text, '(이미지 첨부)');
+});
+
+test('assembleContext: 현재 요청 이미지는 전송, 이전 턴 이미지는 기본 생략', () => {
+  const history = [
+    { id: 'u1', role: 'user', content: '이 이미지 분석', images: [IMG] },
+    { id: 'a1', role: 'assistant', content: 'PROMPT', status: 'done' }
+  ];
+  const ctx = C.assembleContext({ systemPrompt: 'S', history, input: '표정만 바꿔줘', context: {} });
+  assert.equal(typeof ctx.messages[1].content, 'string');
+  assert.ok(ctx.messages[1].content.includes('첨부 이미지 1장'));
+  assert.equal(ctx.imageCount, 0);
+  const re = C.assembleContext({ systemPrompt: 'S', history, input: 'x', vision: { resendHistoryImages: true }, context: {} });
+  assert.equal(re.imageCount, 1);
+  const cur = C.assembleContext({ systemPrompt: 'S', history: [], input: '분석', images: [IMG, IMG], context: {} });
+  const last = cur.messages[cur.messages.length - 1];
+  assert.ok(Array.isArray(last.content));
+  assert.equal(cur.imageCount, 2);
+});
+
+test('normalizeMessages: 배열 content 유지·병합', () => {
+  const msgs = [
+    { role: 'system', content: 'SYS' },
+    { role: 'user', content: 'a' },
+    { role: 'user', content: C.buildUserContent('b', [IMG]) }
+  ];
+  const out = C.normalizeMessages(msgs, { hasFirstSystemPrompt: true, requiresAlternateRole: true });
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[1].content.map((p) => p.type), ['text', 'text', 'image_url']);
+  const su = C.normalizeMessages(msgs, { systemAsUser: true });
+  assert.equal(su.length, 1);
+  assert.ok(su[0].content[0].text.startsWith('SYS'));
+  assert.equal(C.countImages(su), 1);
+});
+
+test('buildPlannerMessages: 이미지 첨부 시 content parts', () => {
+  const pm = C.buildPlannerMessages('', {}, [IMG], {});
+  assert.ok(Array.isArray(pm[1].content));
+  assert.ok(pm[1].content[0].text.includes('1 image(s) attached'));
+  assert.equal(typeof C.buildPlannerMessages('x', {}, [], {})[1].content, 'string');
+});
+
+test('classifyHttpError: 이미지 요청 거부 → VISION_UNSUPPORTED', () => {
+  assert.equal(C.classifyHttpError(400, '{"error":{"message":"This model does not support image input"}}', { hasImages: true }).code, 'VISION_UNSUPPORTED');
+  assert.equal(C.classifyHttpError(400, '{"error":{"message":"This model does not support image input"}}', { hasImages: false }).code, 'BAD_REQUEST');
+});
+
+test('callChat: 이미지 body 전송 및 비전 미지원 분류', async () => {
+  const { srv, seen, url } = await startServer((req, res, rec) => {
+    const hasImg = rec.body.messages.some((m) => Array.isArray(m.content));
+    if (hasImg && req.url.startsWith('/novision')) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end('{"error":{"message":"image_url is not supported by this model"}}'); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+  });
+  try {
+    const msgs = [{ role: 'user', content: C.buildUserContent('x', [IMG]) }];
+    const r = await C.callChat({ settings: settings({ api: { url, modelId: 'm' } }), messages: msgs, stream: false });
+    assert.equal(r.imageCount, 1);
+    assert.equal(seen[0].body.messages[0].content[1].image_url.url, IMG.dataUrl);
+    const bad = url.replace('/v1', '/novision/v1');
+    await assert.rejects(C.callChat({ settings: settings({ api: { url: bad, modelId: 'm' } }), messages: msgs, stream: false }), (e) => e.code === 'VISION_UNSUPPORTED');
+  } finally { srv.close(); }
 });
