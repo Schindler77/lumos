@@ -147,6 +147,16 @@ svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none;
 .att-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .72); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
 .att-x svg.i { width: 12px; height: 12px; stroke-width: 2.4; }
 .msg.user .bubble.has-img { display: grid; gap: 8px; }
+.msg.user { flex-direction: column; align-items: flex-end; gap: 4px; }
+.user-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .12s; }
+.msg.user:hover .user-actions, .msg.user:focus-within .user-actions { opacity: 1; }
+.user-actions .act { padding: 3px 9px; font-size: 12px; }
+.edit-box { width: min(100%, 680px); display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--elev); }
+.edit-box textarea { min-height: 72px; max-height: 360px; resize: none; background: var(--bg); font-size: 15px; }
+.edit-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.edit-foot .hint { flex: 1; min-width: 180px; }
+.edit-box .msg-imgs { justify-content: flex-start; }
+@media (hover: none) { .user-actions { opacity: 1; } }
 .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .thumb { padding: 0; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--bg); cursor: zoom-in; height: 150px; max-width: min(260px, 100%); }
 .thumb img { height: 100%; width: auto; max-width: 100%; object-fit: cover; display: block; }
@@ -288,7 +298,6 @@ details.adv > .section { padding-bottom: 14px; }
     <header class="topbar">
       <button class="icon-btn" id="btn-sidebar-open" type="button" title="대화방 목록" aria-label="대화방 목록 열기"><svg class="i"><use href="#i-panel"/></svg></button>
       <div class="chat-title" id="chat-title"></div>
-      <button class="icon-btn" id="btn-settings" type="button" title="설정" aria-label="설정"><svg class="i"><use href="#i-gear"/></svg></button>
     </header>
     <div class="banner" id="banner" role="status"></div>
     <section class="messages" id="messages" aria-live="polite">
@@ -404,6 +413,16 @@ details.adv > .section { padding-bottom: 14px; }
           <label class="check"><input type="checkbox" data-bind="api.allowNoKey"><span>API 키 없음 허용<span class="sub">localhost·127.0.0.1·::1·사설망 주소는 자동으로 허용됩니다. 키가 없으면 Authorization 헤더를 아예 보내지 않습니다.</span></span></label>
         </div>
         <div class="section">
+          <h3>추론 설정</h3>
+          <p class="desc">추론(thinking) 모델용 설정입니다. "보내지 않음"이면 요청에 넣지 않습니다. 모델이 지원하지 않는 값을 넣으면 오류가 날 수 있으니 [모델 진단]으로 확인하세요.</p>
+          <div class="grid3">
+            <div class="field"><label for="f-effort">Reasoning Effort</label><select class="sel" id="f-effort" data-bind="generation.reasoningEffort"><option value="">보내지 않음</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+            <div class="field"><label for="f-tlevel">Thinking Level <span class="sub">(Gemini)</span></label><select class="sel" id="f-tlevel" data-bind="generation.thinkingLevel"><option value="">보내지 않음</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+            <div class="field"><label for="f-tbudget">Thinking Budget Tokens <span class="sub">(0 = 보내지 않음)</span></label><input class="inp" id="f-tbudget" type="number" min="0" data-bind="generation.thinkingBudget"></div>
+          </div>
+          <p class="hint">Reasoning Effort는 reasoning_effort 필드로 보냅니다(OpenAI o·GPT-5 계열, Gemini OpenAI 호환 등). Thinking Level / Budget은 모델 ID로 공급자를 알 수 있을 때만 보냅니다 (Gemini: extra_body.google.thinking_config, Claude: thinking.budget_tokens). 다른 공급자는 고급 / 진단 › 추가 body JSON을 사용하세요.</p>
+        </div>
+        <div class="section">
           <h3>프록시</h3>
           <p class="desc">브라우저가 CORS 때문에 원본 API를 직접 호출하지 못할 때 사용합니다. 요청 body의 model 값은 위 모델 ID를 그대로 사용합니다.</p>
           <label class="check"><input type="checkbox" id="f-proxy-on" data-bind="proxy.enabled"><span>프록시 사용</span></label>
@@ -453,13 +472,9 @@ details.adv > .section { padding-bottom: 14px; }
               <div class="field"><label for="f-maxtok">max_output_tokens 값</label><input class="inp" id="f-maxtok" type="number" min="1" data-bind="generation.maxTokens"></div>
               <div class="field"><label for="f-tokparam">토큰 파라미터</label><select class="sel" id="f-tokparam" data-bind="generation.tokenParam"><option value="auto">자동 (모델 ID 기준)</option><option value="max_tokens">max_tokens</option><option value="max_completion_tokens">max_completion_tokens</option><option value="max_output_tokens">max_output_tokens</option><option value="none">보내지 않음</option></select></div>
               <div class="field"><label for="f-timeout">타임아웃 (초)</label><input class="inp" id="f-timeout" type="number" min="5" max="1800" data-bind="generation.timeoutSec"></div>
-              <div class="field"><label for="f-effort">Reasoning Effort</label><select class="sel" id="f-effort" data-bind="generation.reasoningEffort"><option value="">보내지 않음</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
-              <div class="field"><label for="f-tlevel">Thinking Level <span class="sub">(Gemini)</span></label><select class="sel" id="f-tlevel" data-bind="generation.thinkingLevel"><option value="">보내지 않음</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
-              <div class="field"><label for="f-tbudget">Thinking Budget Tokens <span class="sub">(0 = 보내지 않음)</span></label><input class="inp" id="f-tbudget" type="number" min="0" data-bind="generation.thinkingBudget"></div>
               <div class="field"><label for="f-temp">Temperature <span class="sub">(비우면 보내지 않음)</span></label><input class="inp" id="f-temp" inputmode="decimal" data-bind="generation.temperature" data-type="numstr"></div>
             </div>
             <div class="field"><label for="f-extra">추가 body JSON <span class="sub">(공급자 전용 필드. messages/stream은 덮어쓰지 않음)</span></label><textarea class="ta mono" id="f-extra" rows="3" data-bind="generation.extraBody" placeholder='{"top_p": 0.9}' spellcheck="false"></textarea></div>
-            <p class="hint">Thinking Level / Budget은 모델 ID로 공급자를 알 수 있을 때만 해당 형식으로 보냅니다 (Gemini: extra_body.google.thinking_config, Claude: thinking.budget_tokens). 지원하지 않는 값은 강제로 보내지 않습니다.</p>
           </div>
         </details>
         <details class="adv">

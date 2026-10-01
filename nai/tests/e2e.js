@@ -20,7 +20,7 @@ function check(name, ok, info) {
 }
 
 async function openSettings(page, tab) {
-  await page.click('#btn-settings');
+  await page.click('#btn-settings-side');
   await page.click('.set-tab[data-tab="' + tab + '"]');
 }
 async function closeSettings(page) {
@@ -62,6 +62,10 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     await page.goto(srv.staticUrl);
     await page.waitForSelector('.empty h1');
     await page.screenshot({ path: path.join(shotDir, '01-empty.png') });
+    check('설정 버튼은 왼쪽 아래 하나만', !(await page.$('#btn-settings')) && (await page.locator('#btn-settings-side').count()) === 1);
+    await openSettings(page, 'api');
+    check('추론 설정이 API 탭에 표시', await page.isVisible('.set-panel[data-panel="api"] #f-effort') && await page.isVisible('#f-tlevel') && await page.isVisible('#f-tbudget'));
+    await closeSettings(page);
 
     // T04 — LM Studio 형태 로컬 no-key
     await configure(page, { url: srv.apiBase + '/v1' });
@@ -128,6 +132,29 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     await (await lastAssistant(page)).locator('button:has-text("재생성")').click();
     await page.waitForFunction(() => !document.querySelector('.status-line .spinner'));
     check('재생성 (메시지 수 유지, Planner 캐시 재사용)', (await page.locator('.msg.assistant').count()) === countBefore && !srv.log.some((r) => r.kind === 'planner'));
+
+    // 보낸 메시지 수정 — 취소는 그대로, 저장은 아래 대화 삭제 후 재전송
+    const firstUser = page.locator('.msg.user').first();
+    const msgCountBefore = await page.locator('.msg').count();
+    srv.log.length = 0;
+    await firstUser.hover();
+    await firstUser.locator('button:has-text("수정")').click();
+    await page.fill('.edit-box textarea', '바뀐 내용 (취소될 것)');
+    await page.click('.edit-box button:has-text("취소")');
+    check('수정 → 취소: 아무것도 바뀌지 않음', (await page.locator('.msg').count()) === msgCountBefore && !(await page.$('.edit-box')) && (await page.locator('.msg.user .bubble-text').first().innerText()) === '책상 위에 엎드려 팔을 접고 머리를 숙인 자세' && srv.log.length === 0);
+    await firstUser.hover();
+    await firstUser.locator('button:has-text("수정")').click();
+    await page.press('.edit-box textarea', 'Escape');
+    check('수정 → Esc: 빠져나옴', !(await page.$('.edit-box')));
+    await firstUser.hover();
+    await firstUser.locator('button:has-text("수정")').click();
+    await page.fill('.edit-box textarea', '해변에 누워 있는 소녀');
+    await page.screenshot({ path: path.join(shotDir, '11-edit.png') });
+    await page.click('.edit-box button:has-text("저장")');
+    await page.waitForFunction(() => !document.querySelector('.status-line .spinner') && document.querySelectorAll('.msg').length === 2);
+    const ef = srv.log.find((r) => r.kind === 'final');
+    check('수정 → 저장: 아래 대화 삭제 + 수정 내용으로 재전송', (await page.locator('.msg').count()) === 2 && ef && ef.body.messages[ef.body.messages.length - 1].content === '해변에 누워 있는 소녀' && !ef.body.messages.some((m) => m.role === 'assistant'));
+    check('수정 → 저장: 새 결과 출력', (await (await lastAssistant(page)).locator('.result-body').count()) === 1);
 
     // T08 — 스트리밍 중 취소
     await page.fill('#input', 'SLOW 테스트');

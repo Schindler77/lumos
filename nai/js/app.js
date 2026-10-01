@@ -20,6 +20,7 @@
     gen: null,            // { chatId, assistantId, controller, phase }
     plannerCache: new Map(),
     attachments: [],      // 입력창에 첨부된 이미지 (전송 전)
+    edit: null,           // 보낸 메시지 수정 중: { id, text, images }
     draft: null,
     dirty: false,
     tab: 'prompt'
@@ -117,6 +118,7 @@
   function selectChat(id) {
     saveDraftNow();
     S.currentId = id && S.chats.has(id) ? id : null;
+    S.edit = null;
     lsSet('nai:current', S.currentId || '');
     $('app').classList.remove('sb-open');
     renderChatList();
@@ -209,6 +211,68 @@
     return pre;
   }
 
+  // ───────────────────────── 보낸 메시지 수정 ─────────────────────────
+  function startEdit(chat, m) {
+    if (S.gen) return;
+    S.edit = { id: m.id, text: m.content || '', images: (m.images || []).slice() };
+    renderThread();
+    var ta = $('thread').querySelector('.edit-box textarea');
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+
+  function cancelEdit() {
+    S.edit = null;
+    renderThread();
+  }
+
+  function saveEdit(chat, m) {
+    if (S.gen || !S.edit) return;
+    var text = S.edit.text.trim();
+    var images = S.edit.images;
+    if (!text && !images.length) { alert('내용이 비어 있습니다. 글이나 이미지가 하나는 있어야 합니다.'); return; }
+    var i = chat.messages.indexOf(m);
+    if (i < 0) { S.edit = null; renderThread(); return; }
+    // ChatGPT 방식: 수정한 메시지 아래 대화는 지우고 거기서부터 다시 생성
+    var now = Date.now();
+    var userMsg = { id: uid(), role: 'user', content: text, createdAt: now, editedFrom: m.id };
+    if (images.length) userMsg.images = images;
+    var asst = { id: uid(), role: 'assistant', content: '', status: 'streaming', replyTo: userMsg.id, createdAt: now };
+    chat.messages = chat.messages.slice(0, i).concat([userMsg, asst]);
+    recomputeLastFinal(chat);
+    chat.updatedAt = now;
+    S.edit = null;
+    renderChatList();
+    renderThread(true);
+    generate(chat, userMsg, asst);
+  }
+
+  function renderEditBox(chat, m) {
+    var ed = S.edit;
+    var ta = el('textarea', { class: 'ta', rows: '3', 'aria-label': '메시지 수정' });
+    ta.value = ed.text;
+    function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 360) + 'px'; }
+    ta.addEventListener('input', function () { ed.text = ta.value; grow(); });
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); saveEdit(chat, m); }
+    });
+    requestAnimationFrame(grow);
+    var imgs = el('div', { class: 'msg-imgs' }, ed.images.map(function (im) {
+      return el('div', { class: 'att', title: im.name || '이미지' }, el('img', { src: im.dataUrl, alt: im.name || '첨부 이미지' }),
+        el('button', { class: 'att-x', type: 'button', title: '이미지 빼기', 'aria-label': '이미지 빼기', onclick: function () {
+          ed.images = ed.images.filter(function (x) { return x !== im; }); renderThread();
+        } }, icon('x')));
+    }));
+    var hasLater = chat.messages.length - chat.messages.indexOf(m) - 1 > 1; // 자기 답변 외에 뒤 대화가 있는지
+    return el('div', { class: 'msg user', 'data-mid': m.id }, el('div', { class: 'edit-box' },
+      ed.images.length ? imgs : null,
+      ta,
+      el('div', { class: 'edit-foot' },
+        el('span', { class: 'hint', text: hasLater ? '저장하면 이 메시지 아래 대화는 삭제되고 다시 생성합니다. (Ctrl+Enter 저장 · Esc 취소)' : '저장하면 수정한 내용으로 다시 생성합니다. (Ctrl+Enter 저장 · Esc 취소)' }),
+        el('button', { class: 'btn', type: 'button', onclick: cancelEdit }, '취소'),
+        el('button', { class: 'btn primary', type: 'button', disabled: !!S.gen, onclick: function () { saveEdit(chat, m); } }, '저장'))));
+  }
+
   function isLastAssistant(chat, m) {
     for (var i = chat.messages.length - 1; i >= 0; i--) if (chat.messages[i].role === 'assistant') return chat.messages[i].id === m.id;
     return false;
@@ -245,13 +309,16 @@
 
   function renderMessage(chat, m) {
     if (m.role === 'user') {
+      if (S.edit && S.edit.id === m.id) return renderEditBox(chat, m);
       var imgs = m.images || [];
+      var editBtn = el('button', { class: 'act', type: 'button', title: S.gen ? '생성 중에는 수정할 수 없습니다' : '메시지 수정', disabled: !!S.gen, onclick: function () { startEdit(chat, m); } }, icon('edit'), '수정');
       return el('div', { class: 'msg user', 'data-mid': m.id }, el('div', { class: 'bubble' + (imgs.length ? ' has-img' : '') },
         imgs.length ? el('div', { class: 'msg-imgs' }, imgs.map(function (im) {
           return el('button', { class: 'thumb', type: 'button', title: (im.name || '이미지') + ' · ' + im.width + '×' + im.height, onclick: function () { openLightbox(im.dataUrl); } },
             el('img', { src: im.dataUrl, alt: im.name || '첨부 이미지', loading: 'lazy' }));
         })) : null,
-        m.content ? el('div', { class: 'bubble-text', text: m.content }) : null));
+        m.content ? el('div', { class: 'bubble-text', text: m.content }) : null),
+        el('div', { class: 'user-actions' }, editBtn));
     }
 
     var wrap = el('div', { class: 'msg assistant', 'data-mid': m.id });
@@ -409,7 +476,7 @@
       btn.disabled = !$('input').value.trim() && !S.attachments.length;
       btn.replaceChildren(icon('up'));
       btn.title = '전송 (Enter)'; btn.setAttribute('aria-label', '전송');
-      hint.textContent = S.attachments.some(function (a) { return a.pending; }) ? '이미지 준비 중…' : 'Enter 전송 · Shift+Enter 줄바꿈 · 이미지는 클립 버튼·붙여넣기·끌어다 놓기';
+      hint.textContent = S.attachments.some(function (a) { return a.pending; }) ? '이미지 준비 중…' : 'Enter 전송 · Shift+Enter 줄바꿈 · 이미지 첨부 가능';
     }
   }
 
@@ -1272,7 +1339,6 @@
     window.addEventListener('beforeunload', saveDraftNow);
 
     $('btn-new-chat').addEventListener('click', newChat);
-    $('btn-settings').addEventListener('click', function () { openSettings(); });
     $('btn-settings-side').addEventListener('click', function () { $('app').classList.remove('sb-open'); openSettings(); });
     $('btn-collapse').addEventListener('click', function () { $('app').classList.add('sb-collapsed'); lsSet('nai:sb', 'collapsed'); });
     $('btn-sidebar-open').addEventListener('click', function () {
