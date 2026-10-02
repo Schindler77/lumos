@@ -308,12 +308,56 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     await page.click('#set-cancel');
     await page.waitForFunction(() => !document.getElementById('settings').open);
 
+    // 모델 프리셋: 저장 2개 → 사이드바에서 전환 → 요청 대상·추론 필드가 바뀜
+    await openSettings(page, 'api');
+    await page.fill('#f-url', srv.apiBase + '/v1');
+    await page.fill('#f-model', 'mock-model');
+    await page.fill('#f-name', '로컬 모델');
+    await page.fill('#f-key', '');
+    await page.setChecked('#f-proxy-on', false);
+    await page.selectOption('#f-effort', 'low');
+    page.once('dialog', (d) => d.accept('로컬'));
+    await page.click('#preset-new');
+    await page.waitForFunction(() => document.querySelectorAll('#preset-select option').length === 2);
+    check('프리셋: 새로 저장 + 현재 값과 일치 표시', (await page.textContent('#preset-state')).includes('같음'));
+    await page.fill('#f-url', srv.apiBase + '/auth/v1');
+    await page.fill('#f-key', 'good-key');
+    await page.fill('#f-name', '원격 모델');
+    await page.selectOption('#f-effort', '');
+    check('프리셋: 값을 바꾸면 수정됨 표시', (await page.textContent('#preset-state')).includes('수정됨'));
+    page.once('dialog', (d) => d.accept('원격'));
+    await page.click('#preset-new');
+    await page.waitForFunction(() => document.querySelectorAll('#preset-select option').length === 3);
+    await page.click('#set-save');
+    await page.waitForFunction(() => !document.getElementById('settings').open);
+    check('프리셋: 사이드바 빠른 전환 표시', await page.isVisible('#preset-quick') && (await page.locator('#preset-quick option').count()) === 2);
+    await page.selectOption('#preset-quick', { label: '로컬' });
+    srv.log.length = 0;
+    await send(page, '해변에 누워 있는 소녀');
+    const pr1 = srv.log.find((r) => r.kind === 'final');
+    check('프리셋 전환(로컬): 대상 URL·추론 필드·키 없음', pr1.url === '/v1/chat/completions' && pr1.body.reasoning_effort === 'low' && !pr1.headers.authorization);
+    await page.selectOption('#preset-quick', { label: '원격' });
+    srv.log.length = 0;
+    await send(page, '해변에 누워 있는 소녀');
+    const pr2 = srv.log.find((r) => r.kind === 'final');
+    check('프리셋 전환(원격): 대상 URL·키·추론 필드 없음', pr2.url === '/auth/v1/chat/completions' && pr2.headers.authorization === 'Bearer good-key' && !('reasoning_effort' in pr2.body));
+    await openSettings(page, 'api');
+    check('프리셋: 설정창에 현재 프리셋 선택됨', (await page.inputValue('#f-name')) === '원격 모델' && (await page.$eval('#preset-select', (e) => e.options[e.selectedIndex].text)).startsWith('원격'));
+    await page.selectOption('#preset-select', { label: '로컬 · mock-model' });
+    check('프리셋: 목록에서 고르면 입력란 채움(저장 전)', (await page.inputValue('#f-url')).endsWith('/v1') && !(await page.inputValue('#f-url')).includes('/auth/') && (await page.inputValue('#f-effort')) === 'low');
+    await page.screenshot({ path: path.join(shotDir, '12-presets.png') });
+    page.once('dialog', (d) => d.accept());
+    await page.click('#set-cancel');
+    await page.waitForFunction(() => !document.getElementById('settings').open);
+    check('프리셋: 취소하면 적용 안 됨', (await page.$eval('#preset-quick', (e) => e.options[e.selectedIndex].text)) === '원격');
+
     // 새로고침 후 유지
     const chatCount = await page.locator('.chat-item').count();
     await page.reload();
     await page.waitForFunction(() => /행$/.test(document.getElementById('ref-status').textContent), null, { timeout: 30000 });
     check('새로고침 후 대화·참조 CSV 유지', (await page.locator('.chat-item').count()) === chatCount && chatCount === 4);
     check('새로고침 후 첨부 이미지 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('chats').objectStore('chats').getAll(); g.onsuccess = () => res(g.result.some((c) => c.messages.some((m) => m.images && m.images[0] && /^data:image\/jpeg/.test(m.images[0].dataUrl)))); }; })));
+    check('새로고침 후 프리셋 유지', (await page.locator('#preset-quick option').count()) === 2);
     check('새로고침 후 설정 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('kv').objectStore('kv').get('settings'); g.onsuccess = () => res(g.result.api.modelId === 'mock-model'); }; })));
 
     // 대화방 이름 변경 / 삭제

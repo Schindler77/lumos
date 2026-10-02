@@ -119,8 +119,14 @@
       enabled: true,
       tokenLimit: 700
     },
-    debug: false
+    debug: false,
+    presets: [],
+    activePresetId: ''
   };
+
+  // ───────────────────────── 모델 프리셋 ─────────────────────────
+  // 모델마다 달라지는 묶음: API·프록시·생성(추론/호환)·Planner·비전
+  var PRESET_KEYS = ['api', 'proxy', 'generation', 'planner', 'vision'];
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
@@ -138,12 +144,43 @@
     return out;
   }
 
+  function presetFromSettings(settings, name, id) {
+    var p = { id: id || 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: String(name || '').trim() || '이름 없는 프리셋', updatedAt: Date.now() };
+    PRESET_KEYS.forEach(function (k) { p[k] = clone(settings[k] || DEFAULT_SETTINGS[k]); });
+    return p;
+  }
+
+  // 프리셋 섹션은 평평한 객체라 기본값 위에 얕게 덮어쓴다 (예전 프리셋에 없는 새 필드 보충)
+  function presetSection(p, k) { return Object.assign(clone(DEFAULT_SETTINGS[k]), clone(p && p[k] || {})); }
+
+  function applyPreset(settings, preset) {
+    var out = clone(settings);
+    PRESET_KEYS.forEach(function (k) { out[k] = presetSection(preset, k); });
+    out.activePresetId = preset.id;
+    return out;
+  }
+
+  function presetMatches(settings, preset) {
+    if (!preset) return false;
+    return PRESET_KEYS.every(function (k) {
+      return JSON.stringify(presetSection(settings, k)) === JSON.stringify(presetSection(preset, k));
+    });
+  }
+
+  function findPreset(settings, id) {
+    return (settings.presets || []).filter(function (p) { return p.id === id; })[0] || null;
+  }
+
   // 내보내기용: 민감정보 제외가 기본값
   function exportSettings(settings, includeSecrets) {
     var s = clone(settings);
     if (!includeSecrets) {
       s.api.apiKey = '';
       s.proxy.token = '';
+      (s.presets || []).forEach(function (p) {
+        if (p.api) p.api.apiKey = '';
+        if (p.proxy) p.proxy.token = '';
+      });
     }
     s.exportedAt = new Date().toISOString();
     s.secretsIncluded = !!includeSecrets;
@@ -461,7 +498,10 @@
   }
 
   function secretsOf(settings) {
-    return [settings && settings.api && settings.api.apiKey, settings && settings.proxy && settings.proxy.token].filter(Boolean);
+    var out = [];
+    function add(x) { if (x && x.api && x.api.apiKey) out.push(x.api.apiKey); if (x && x.proxy && x.proxy.token) out.push(x.proxy.token); }
+    if (settings) { add(settings); (settings.presets || []).forEach(add); }
+    return out;
   }
 
   // fetch 자체가 실패(TypeError)했을 때 CORS / 네트워크 / 혼합콘텐츠 구분
@@ -1068,6 +1108,8 @@
     PLANNER_SYSTEM: PLANNER_SYSTEM,
     ERROR_TEXT: ERROR_TEXT,
     clone: clone, mergeDefaults: mergeDefaults, exportSettings: exportSettings,
+    PRESET_KEYS: PRESET_KEYS, presetFromSettings: presetFromSettings, applyPreset: applyPreset,
+    presetMatches: presetMatches, findPreset: findPreset,
     parseUrl: parseUrl, hostKind: hostKind, isLocalKind: isLocalKind,
     resolveApiUrl: resolveApiUrl, modelsUrlFrom: modelsUrlFrom, stripBearer: stripBearer,
     resolveTarget: resolveTarget, autoTokenParam: autoTokenParam, providerOf: providerOf,

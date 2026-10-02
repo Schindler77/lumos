@@ -65,6 +65,11 @@ svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none;
 .sb-foot { border-top: 1px solid var(--border); padding: 8px; display: grid; gap: 4px; }
 .sb-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); cursor: pointer; text-align: left; }
 .sb-btn:hover { background: var(--elev); color: var(--text); }
+.preset-quick { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px 10px; }
+.preset-quick[hidden] { display: none; }
+.preset-quick label { font-size: 12px; color: var(--muted); flex: none; }
+.preset-quick .sel { padding: 6px 8px; font-size: 13px; }
+.preset-box { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
 .ref-status { font-size: 11.5px; color: var(--muted); padding: 2px 10px 4px; line-height: 1.5; }
 .ref-status b { color: var(--text-2); font-weight: 600; }
 
@@ -288,6 +293,10 @@ details.adv > .section { padding-bottom: 14px; }
     <div class="sb-label">대화</div>
     <nav class="sb-list" id="chat-list"></nav>
     <div class="sb-foot">
+      <div class="preset-quick" id="preset-quick-wrap" hidden>
+        <label for="preset-quick">모델</label>
+        <select class="sel" id="preset-quick"></select>
+      </div>
       <button class="sb-btn" id="btn-settings-side" type="button"><svg class="i"><use href="#i-gear"/></svg>설정</button>
       <div class="ref-status" id="ref-status"></div>
     </div>
@@ -396,6 +405,22 @@ details.adv > .section { padding-bottom: 14px; }
 
       <!-- API / 프록시 -->
       <div class="set-panel" data-panel="api" role="tabpanel">
+        <div class="section preset-box">
+          <h3>모델 프리셋</h3>
+          <p class="desc">이 탭의 모델·API·추론·프록시·이미지 설정과 고급 호환 옵션, Planner 설정을 한 묶음으로 저장합니다. 목록에서 고르면 값이 채워지고, 아래 [저장]을 눌러야 적용됩니다. 저장해 둔 프리셋은 사이드바 아래에서 바로 바꿀 수도 있습니다.</p>
+          <div class="row">
+            <label class="sr-only" for="preset-select">프리셋 선택</label>
+            <select class="sel" id="preset-select" style="flex:1;min-width:200px"></select>
+            <span class="counter" id="preset-state"></span>
+          </div>
+          <div class="row">
+            <button class="btn" type="button" id="preset-new"><svg class="i"><use href="#i-plus"/></svg>새 프리셋으로 저장</button>
+            <button class="btn" type="button" id="preset-update">현재 값으로 덮어쓰기</button>
+            <button class="btn" type="button" id="preset-rename"><svg class="i"><use href="#i-edit"/></svg>이름 변경</button>
+            <button class="btn danger" type="button" id="preset-delete"><svg class="i"><use href="#i-trash"/></svg>삭제</button>
+          </div>
+          <p class="hint">프리셋 추가·덮어쓰기·이름 변경·삭제는 바로 저장됩니다. API 키와 프록시 토큰도 프리셋에 함께 저장됩니다(설정 내보내기 때는 기본으로 빠짐).</p>
+        </div>
         <div class="section">
           <h3>모델</h3>
           <div class="grid2">
