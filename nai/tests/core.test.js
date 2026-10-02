@@ -488,3 +488,40 @@ test('callChat: 이미지 body 전송 및 비전 미지원 분류', async () => 
     await assert.rejects(C.callChat({ settings: settings({ api: { url: bad, modelId: 'm' } }), messages: msgs, stream: false }), (e) => e.code === 'VISION_UNSUPPORTED');
   } finally { srv.close(); }
 });
+
+// ───────── 모델 프리셋 ─────────
+test('프리셋: 저장 → 적용 → 일치 비교, 다른 설정은 보존', () => {
+  const a = settings({ systemPrompt: 'MY SP', api: { name: 'A', modelId: 'model-a', url: 'http://localhost:1234/v1' }, generation: { reasoningEffort: 'high', maxTokens: 4000 } });
+  const pa = C.presetFromSettings(a, '로컬 A');
+  const b = settings({ systemPrompt: 'MY SP', api: { modelId: 'model-b', url: 'https://x.com/v1', apiKey: 'sk-b' }, proxy: { enabled: true, url: 'https://p/v1', token: 't' } });
+  const pb = C.presetFromSettings(b, 'B');
+  assert.equal(pa.name, '로컬 A');
+  assert.ok(C.presetMatches(a, pa));
+  assert.ok(!C.presetMatches(a, pb));
+  const switched = C.applyPreset(Object.assign(C.clone(a), { presets: [pa, pb] }), pb);
+  assert.equal(switched.api.modelId, 'model-b');
+  assert.equal(switched.proxy.enabled, true);
+  assert.equal(switched.generation.reasoningEffort, '');
+  assert.equal(switched.systemPrompt, 'MY SP');
+  assert.equal(switched.activePresetId, pb.id);
+  assert.equal(switched.presets.length, 2);
+  assert.ok(C.presetMatches(switched, pb));
+  assert.equal(C.findPreset(switched, pa.id).name, '로컬 A');
+});
+
+test('프리셋: 예전 프리셋에 없는 필드는 기본값으로 보충', () => {
+  const old = { id: 'x', name: 'old', api: { modelId: 'm' } };
+  const s = C.applyPreset(settings(), old);
+  assert.equal(s.generation.maxTokens, 2048);
+  assert.equal(s.vision.maxSide, 1536);
+  assert.equal(s.api.modelId, 'm');
+});
+
+test('프리셋: 내보내기 시 프리셋 키도 제외, 비밀값 마스킹 대상 포함', () => {
+  const s = settings({ presets: [{ id: 'a', name: 'a', api: { apiKey: 'sk-preset-1234' }, proxy: { token: 'ptok-preset' } }] });
+  const e = C.exportSettings(s, false);
+  assert.equal(e.presets[0].api.apiKey, '');
+  assert.equal(e.presets[0].proxy.token, '');
+  assert.equal(s.presets[0].api.apiKey, 'sk-preset-1234');
+  assert.ok(C.secretsOf(s).includes('ptok-preset'));
+});

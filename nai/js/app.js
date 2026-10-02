@@ -948,6 +948,7 @@
     selectTab(tab || S.tab || 'prompt');
     updateSpCount();
     updateApiPreview();
+    renderPresetUI();
     renderRefStatus();
     $('sp-lint').replaceChildren();
     var d = $('settings');
@@ -960,7 +961,112 @@
     if (d.close) d.close(); else d.removeAttribute('open');
     S.draft = null;
     setDirty(false);
+    renderPresetQuick();
     renderThread();
+  }
+
+  // ───────────────────────── 모델 프리셋 ─────────────────────────
+  function presetLabel(p) { return p.name + (p.api && p.api.modelId ? ' · ' + p.api.modelId : ''); }
+
+  function renderPresetUI() {
+    var d = S.draft;
+    if (!d) return;
+    var sel = $('preset-select');
+    var list = d.presets || [];
+    var active = C.findPreset(d, d.activePresetId);
+    var opts = [el('option', { value: '' }, list.length ? '— 프리셋 선택 —' : '저장된 프리셋 없음')];
+    list.forEach(function (p) { opts.push(el('option', { value: p.id }, presetLabel(p))); });
+    sel.replaceChildren.apply(sel, opts);
+    sel.value = active ? active.id : '';
+    var st = $('preset-state');
+    if (!active) st.textContent = '';
+    else if (C.presetMatches(readForm(), active)) { st.textContent = '✓ 현재 값과 같음'; st.style.color = 'var(--ok)'; }
+    else { st.textContent = '수정됨 — [현재 값으로 덮어쓰기]로 반영'; st.style.color = 'var(--warn)'; }
+    $('preset-update').disabled = !active;
+    $('preset-rename').disabled = !active;
+    $('preset-delete').disabled = !active;
+  }
+
+  // 프리셋 목록 변경은 [저장]을 기다리지 않고 바로 보관한다.
+  function persistPresets(list, activeId) {
+    S.draft.presets = list;
+    S.draft.activePresetId = activeId || '';
+    S.settings.presets = C.clone(list);
+    if (activeId || !C.findPreset(S.settings, S.settings.activePresetId)) S.settings.activePresetId = activeId || '';
+    saveSettings().catch(function () { alert('프리셋을 저장하지 못했습니다.'); });
+    renderPresetUI();
+    renderPresetQuick();
+  }
+
+  function onPresetSelect() {
+    var id = $('preset-select').value;
+    if (!id) { S.draft.activePresetId = ''; renderPresetUI(); return; }
+    var p = C.findPreset(S.draft, id);
+    if (!p) return;
+    var next = C.applyPreset(readForm(), p);
+    S.draft = next;
+    fillForm(next);
+    setDirty(true);
+    updateApiPreview();
+  }
+
+  function presetNew() {
+    var cur = readForm();
+    var name = prompt('프리셋 이름', cur.api.name || cur.api.modelId || '');
+    if (name == null) return;
+    if (!name.trim()) { alert('이름을 입력하세요.'); return; }
+    var p = C.presetFromSettings(cur, name);
+    persistPresets((S.draft.presets || []).concat([p]), p.id);
+  }
+
+  function presetUpdate() {
+    var p = C.findPreset(S.draft, S.draft.activePresetId);
+    if (!p) return;
+    if (!confirm('"' + p.name + '" 프리셋을 지금 입력된 값으로 덮어쓸까요?')) return;
+    var np = C.presetFromSettings(readForm(), p.name, p.id);
+    persistPresets(S.draft.presets.map(function (x) { return x.id === p.id ? np : x; }), p.id);
+  }
+
+  function presetRename() {
+    var p = C.findPreset(S.draft, S.draft.activePresetId);
+    if (!p) return;
+    var name = prompt('새 이름', p.name);
+    if (name == null || !name.trim()) return;
+    persistPresets(S.draft.presets.map(function (x) { return x.id === p.id ? Object.assign({}, x, { name: name.trim() }) : x; }), p.id);
+  }
+
+  function presetDelete() {
+    var p = C.findPreset(S.draft, S.draft.activePresetId);
+    if (!p) return;
+    if (!confirm('"' + p.name + '" 프리셋을 삭제할까요? 현재 입력된 설정은 그대로 남습니다.')) return;
+    persistPresets(S.draft.presets.filter(function (x) { return x.id !== p.id; }), '');
+  }
+
+  // 사이드바 빠른 전환
+  function renderPresetQuick() {
+    var list = S.settings.presets || [];
+    var wrap = $('preset-quick-wrap');
+    wrap.hidden = !list.length;
+    if (!list.length) return;
+    var sel = $('preset-quick');
+    var active = C.findPreset(S.settings, S.settings.activePresetId);
+    var modified = active && !C.presetMatches(S.settings, active);
+    var opts = [];
+    if (!active) opts.push(el('option', { value: '' }, '(직접 설정)'));
+    list.forEach(function (p) { opts.push(el('option', { value: p.id }, p.name + (active && p.id === active.id && modified ? ' (수정됨)' : ''))); });
+    sel.replaceChildren.apply(sel, opts);
+    sel.value = active ? active.id : '';
+    sel.title = active ? presetLabel(active) : '프리셋과 다른 직접 설정';
+  }
+
+  function onPresetQuick() {
+    var p = C.findPreset(S.settings, $('preset-quick').value);
+    if (!p) return;
+    S.settings = C.applyPreset(S.settings, p);
+    saveSettings().catch(function () { alert('설정을 저장하지 못했습니다.'); });
+    renderPresetQuick();
+    var c = currentChat();
+    if (!c || !c.messages.length) renderThread();
   }
 
   function saveSettingsFromForm() {
@@ -989,6 +1095,7 @@
 
   function updateApiPreview() {
     var s = readForm();
+    if (S.draft && S.draft.presets && S.draft.presets.length) renderPresetUI();
     var resolved = C.resolveApiUrl(s.api.url, s.api.mode);
     var kind = C.hostKind(resolved);
     var KIND = { loopback: '로컬(이 컴퓨터) — API 키 없이 사용 가능', private: '로컬망 — API 키 없이 사용 가능', remote: '원격 서버', invalid: 'URL 형식 오류' };
@@ -1274,6 +1381,14 @@
     $('btn-reco').addEventListener('click', recommendedCheck);
     $('btn-diag').addEventListener('click', modelDiagnosis);
 
+    // 프리셋
+    $('preset-select').addEventListener('change', onPresetSelect);
+    $('preset-new').addEventListener('click', presetNew);
+    $('preset-update').addEventListener('click', presetUpdate);
+    $('preset-rename').addEventListener('click', presetRename);
+    $('preset-delete').addEventListener('click', presetDelete);
+    $('preset-quick').addEventListener('change', onPresetQuick);
+
     // 내보내기 / 가져오기
     $('exp-btn').addEventListener('click', function () {
       var inc = $('exp-secrets').checked;
@@ -1290,6 +1405,12 @@
         var merged = C.mergeDefaults(j);
         if (!merged.api.apiKey) merged.api.apiKey = cur.api.apiKey;
         if (!merged.proxy.token) merged.proxy.token = cur.proxy.token;
+        (merged.presets || []).forEach(function (p) {
+          var old = C.findPreset(cur, p.id);
+          if (!old) return;
+          if (p.api && !p.api.apiKey && old.api) p.api.apiKey = old.api.apiKey;
+          if (p.proxy && !p.proxy.token && old.proxy) p.proxy.token = old.proxy.token;
+        });
         delete merged.exportedAt; delete merged.secretsIncluded;
         S.draft = merged;
         fillForm(merged); setDirty(true); updateSpCount(); updateApiPreview();
@@ -1370,6 +1491,7 @@
       ]);
     }).then(function (res) {
       S.settings = C.mergeDefaults(res[0]);
+      renderPresetQuick();
       (res[1] || []).forEach(function (c) {
         if (!c || !c.id || !Array.isArray(c.messages)) return;
         var touched = false;
