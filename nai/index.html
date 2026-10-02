@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark">
+<title>NAI Prompt Generator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161619'/%3E%3Cpath d='M9 22V10l14 12V10' stroke='%23ececf1' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #0c0c0e;
+  --panel: #121215;
+  --elev: #1a1a1e;
+  --elev2: #232329;
+  --hover: #26262c;
+  --border: #2a2a31;
+  --border-strong: #3a3a43;
+  --text: #ececf1;
+  --text-2: #c4c4cc;
+  --muted: #8e8e99;
+  --accent: #ececf1;
+  --accent-fg: #0c0c0e;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --info: #7cb4ff;
+  --radius: 12px;
+  --sb-w: 264px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "D2Coding", "SF Mono", Menlo, Consolas, "Malgun Gothic", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
+body { overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ───── 레이아웃 ───── */
+.app { display: grid; grid-template-columns: var(--sb-w) minmax(0, 1fr); height: 100dvh; }
+.app.sb-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+.app.sb-collapsed .sidebar { visibility: hidden; }
+
+.sidebar { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.sb-head { display: flex; gap: 6px; padding: 12px 10px 8px; }
+.btn-new { flex: 1; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--elev); cursor: pointer; font-weight: 600; }
+.btn-new:hover { background: var(--hover); }
+.icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.sb-label { padding: 10px 16px 4px; font-size: 11.5px; color: var(--muted); letter-spacing: .02em; }
+.sb-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.chat-item { display: flex; align-items: center; gap: 2px; border-radius: 9px; margin: 1px 0; }
+.chat-item > .open { flex: 1; min-width: 0; text-align: left; padding: 8px 10px; border: 0; background: transparent; cursor: pointer; border-radius: 9px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item:hover { background: var(--elev); }
+.chat-item.active { background: var(--elev2); }
+.chat-item.active > .open { color: var(--text); font-weight: 600; }
+.chat-item .mini { width: 28px; height: 28px; border: 0; background: transparent; border-radius: 7px; color: var(--muted); cursor: pointer; display: none; place-items: center; }
+.chat-item .mini svg.i { width: 15px; height: 15px; }
+.chat-item:hover .mini, .chat-item.active .mini, .chat-item:focus-within .mini { display: grid; }
+.chat-item .mini:hover { color: var(--text); background: var(--hover); }
+.chat-item input { flex: 1; min-width: 0; margin: 3px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; }
+.chat-item .gen-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--info); margin-right: 8px; flex: none; animation: pulse 1.2s infinite; }
+.sb-empty { color: var(--muted); padding: 12px 10px; font-size: 13px; }
+.sb-foot { border-top: 1px solid var(--border); padding: 8px; display: grid; gap: 4px; }
+.sb-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); cursor: pointer; text-align: left; }
+.sb-btn:hover { background: var(--elev); color: var(--text); }
+.ref-status { font-size: 11.5px; color: var(--muted); padding: 2px 10px 4px; line-height: 1.5; }
+.ref-status b { color: var(--text-2); font-weight: 600; }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+.topbar { display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 10px; flex: none; }
+.topbar .chat-title { flex: 1; min-width: 0; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+#btn-sidebar-open { display: none; }
+.app.sb-collapsed #btn-sidebar-open { display: inline-grid; }
+
+.banner { margin: 0 16px 8px; padding: 9px 12px; border-radius: 10px; border: 1px solid #5c4813; background: #2a2110; color: #f5d78e; font-size: 13px; }
+.banner:empty { display: none; }
+
+.messages { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.thread { max-width: 860px; margin: 0 auto; padding: 8px 16px 24px; }
+
+/* 빈 화면 */
+.empty { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.empty-inner { max-width: 560px; text-align: center; }
+.empty h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -.01em; }
+.empty p { color: var(--muted); margin: 0 0 18px; line-height: 1.6; }
+.setup-list { display: grid; gap: 8px; text-align: left; margin: 0 auto 18px; max-width: 420px; }
+.setup-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); background: var(--panel); border-radius: 10px; font-size: 13px; }
+.setup-row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.setup-row.ok .dot { background: var(--ok); }
+.setup-row.todo .dot { background: var(--warn); }
+.setup-row span { flex: 1; color: var(--text-2); }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); cursor: pointer; font-size: 13px; }
+.chip:hover { background: var(--elev); color: var(--text); }
+
+/* 메시지 */
+.msg { margin: 18px 0; }
+.msg.user { display: flex; justify-content: flex-end; }
+.msg.user .bubble { max-width: min(85%, 640px); background: var(--elev2); border: 1px solid var(--border); padding: 10px 14px; border-radius: 18px 18px 6px 18px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; user-select: text; }
+.msg.assistant { display: grid; gap: 6px; }
+.status-line { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 4px 2px; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--text-2); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: .35; } }
+.result { border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); overflow: hidden; }
+.result-head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border); background: var(--elev); min-height: 38px; }
+.result-head .label { font-size: 12px; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); }
+.badge.warn { border-color: #6b5413; color: var(--warn); }
+.badge.err { border-color: #6b2626; color: var(--err); }
+.act { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); cursor: pointer; font-size: 12.5px; }
+.act:hover { background: var(--hover); color: var(--text); }
+.act svg.i { width: 14px; height: 14px; }
+.act.done { color: var(--ok); border-color: #1f5133; }
+.result-body { margin: 0; padding: 14px 16px; font-family: var(--mono); font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; user-select: text; color: var(--text); }
+.result-body .seg-code { position: relative; margin: 6px 0; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); }
+.result-body .seg-code pre { margin: 0; padding: 12px 14px; white-space: pre-wrap; word-break: break-word; font: inherit; }
+.result-body .seg-code .act { position: absolute; top: 6px; right: 6px; padding: 3px 8px; }
+.result-body .cursor { display: inline-block; width: 7px; height: 1.1em; vertical-align: text-bottom; background: var(--text-2); animation: pulse 1s infinite; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); padding: 0 2px; }
+.meta-row button.link { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; text-decoration: underline dotted; font-size: 12px; }
+.meta-row button.link:hover { color: var(--text); }
+.issues { display: grid; gap: 4px; font-size: 12.5px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.issue { display: flex; gap: 8px; line-height: 1.5; color: var(--text-2); word-break: break-word; }
+.issue .lv { flex: none; font-size: 11px; font-weight: 700; padding-top: 1px; width: 34px; }
+.lv-error { color: var(--err); } .lv-warn { color: var(--warn); } .lv-info { color: var(--info); } .lv-ok { color: var(--ok); }
+.err-card { border: 1px solid #5a2323; background: #1d1012; border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 6px; }
+.err-card .code { font-family: var(--mono); font-size: 12px; color: var(--err); }
+.err-card .text { white-space: pre-wrap; line-height: 1.6; }
+.err-card .detail { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.err-card .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.debug { font-family: var(--mono); font-size: 11.5px; color: var(--muted); border: 1px dashed var(--border-strong); border-radius: 10px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; user-select: text; }
+
+/* 입력창 */
+.composer-wrap { flex: none; padding: 8px 16px calc(14px + env(safe-area-inset-bottom)); }
+.composer { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; background: var(--elev); border: 1px solid var(--border); border-radius: 22px; padding: 8px; }
+.composer:focus-within { border-color: var(--border-strong); }
+.composer.drop { border-color: var(--info); border-style: dashed; background: var(--elev2); }
+.composer-row { display: flex; align-items: flex-end; gap: 6px; }
+.attach-btn { width: 38px; height: 38px; border-radius: 50%; }
+.attach-tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 4px 0; }
+.attach-tray[hidden] { display: none; }
+.att { position: relative; width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg); display: grid; place-items: center; overflow: hidden; }
+.att img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.att-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .72); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.att-x svg.i { width: 12px; height: 12px; stroke-width: 2.4; }
+.msg.user .bubble.has-img { display: grid; gap: 8px; }
+.msg.user { flex-direction: column; align-items: flex-end; gap: 4px; }
+.user-actions { display: flex; gap: 6px; opacity: 0; transition: opacity .12s; }
+.msg.user:hover .user-actions, .msg.user:focus-within .user-actions { opacity: 1; }
+.user-actions .act { padding: 3px 9px; font-size: 12px; }
+.edit-box { width: min(100%, 680px); display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--elev); }
+.edit-box textarea { min-height: 72px; max-height: 360px; resize: none; background: var(--bg); font-size: 15px; }
+.edit-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.edit-foot .hint { flex: 1; min-width: 180px; }
+.edit-box .msg-imgs { justify-content: flex-start; }
+@media (hover: none) { .user-actions { opacity: 1; } }
+.msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.thumb { padding: 0; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--bg); cursor: zoom-in; height: 150px; max-width: min(260px, 100%); }
+.thumb img { height: 100%; width: auto; max-width: 100%; object-fit: cover; display: block; }
+dialog.lightbox { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 94dvh; overflow: visible; }
+dialog.lightbox::backdrop { background: rgba(0, 0, 0, .85); }
+dialog.lightbox img { display: block; max-width: 96vw; max-height: 94dvh; object-fit: contain; border-radius: 8px; cursor: zoom-out; }
+.composer textarea { flex: 1; min-height: 24px; max-height: 240px; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 1.6; padding: 7px 0; }
+.composer textarea::placeholder { color: var(--muted); }
+.send-btn { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; cursor: pointer; flex: none; }
+.send-btn:disabled { background: var(--elev2); color: var(--muted); cursor: default; }
+.send-btn svg.i { stroke-width: 2.4; }
+.send-btn.stop { background: var(--text); }
+.composer-hint { max-width: 860px; margin: 6px auto 0; font-size: 11.5px; color: var(--muted); text-align: center; min-height: 16px; }
+
+/* ───── 설정 ───── */
+dialog.settings { width: min(1080px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 24px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--panel); color: var(--text); overflow: hidden; }
+dialog.settings::backdrop { background: rgba(0, 0, 0, .62); }
+.set-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+.set-head { grid-column: 1 / -1; display: flex; align-items: center; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--border); }
+.set-head h2 { flex: 1; margin: 0; font-size: 16px; }
+.set-tabs { border-right: 1px solid var(--border); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.set-tab { text-align: left; padding: 9px 12px; border-radius: 9px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
+.set-tab:hover { background: var(--elev); }
+.set-tab[aria-selected="true"] { background: var(--elev2); color: var(--text); font-weight: 600; }
+.set-body { overflow-y: auto; padding: 18px 22px 28px; }
+.set-panel { display: none; }
+.set-panel.active { display: grid; gap: 18px; align-content: start; }
+.set-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--elev); }
+.set-foot .grow { flex: 1; }
+.set-foot .dirty { font-size: 12px; color: var(--warn); }
+.section { display: grid; gap: 12px; }
+.section > h3 { margin: 0; font-size: 14px; }
+.section > p.desc, .hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > label, .field > .lab { font-size: 12.5px; color: var(--text-2); font-weight: 600; }
+.field .sub { font-weight: 400; color: var(--muted); }
+.inp, .sel, .ta { width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; min-width: 0; }
+.inp:focus, .sel:focus, .ta:focus { border-color: var(--border-strong); outline: none; }
+.ta { resize: vertical; line-height: 1.6; }
+.ta.mono, .inp.mono { font-family: var(--mono); font-size: 12.5px; }
+.ta.sp { min-height: 360px; height: 46dvh; }
+.secret { display: flex; gap: 6px; }
+.secret .inp { flex: 1; }
+.check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; line-height: 1.5; font-size: 13px; color: var(--text-2); }
+.check input { margin: 3px 0 0; accent-color: var(--text); flex: none; }
+.check .sub { display: block; color: var(--muted); font-size: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--elev2); color: var(--text); cursor: pointer; font-size: 13px; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+.btn.primary:hover { background: #fff; }
+.btn.danger { color: var(--err); }
+.btn svg.i { width: 15px; height: 15px; }
+.counter { font-size: 12px; color: var(--muted); }
+.card { border: 1px solid var(--border); background: var(--bg); border-radius: 12px; padding: 14px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-all; }
+.drop { border: 1.5px dashed var(--border-strong); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+.drop.over { border-color: var(--text-2); background: var(--elev); color: var(--text); }
+.progress { height: 6px; border-radius: 999px; background: var(--elev2); overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--text-2); transition: width .2s; }
+.cred { font-size: 12.5px; padding: 10px 12px; border-radius: 10px; background: var(--elev); border: 1px solid var(--border); line-height: 1.7; word-break: break-all; }
+.cred b { color: var(--text); }
+.lint, .diag { display: grid; gap: 6px; }
+.diag-step { display: flex; gap: 10px; font-size: 13px; line-height: 1.55; word-break: break-word; }
+.diag-step .sym { flex: none; width: 16px; text-align: center; font-weight: 700; }
+.diag-step.ok .sym { color: var(--ok); } .diag-step.fail .sym, .diag-step.error .sym { color: var(--err); } .diag-step.warn .sym { color: var(--warn); } .diag-step.info .sym { color: var(--info); }
+.diag-step .note { color: var(--muted); }
+.diag-title { font-weight: 600; font-size: 13px; margin-top: 4px; }
+table.res { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.res th, table.res td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+table.res th { color: var(--muted); font-weight: 600; }
+table.res td.mono { font-family: var(--mono); }
+details.adv { border: 1px solid var(--border); border-radius: 12px; padding: 0 14px; }
+details.adv > summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+details.adv[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+details.adv > .section { padding-bottom: 14px; }
+.scrim { display: none; }
+
+/* ───── 모바일 ───── */
+@media (max-width: 820px) {
+  .app, .app.sb-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; z-index: 30; inset: 0 auto 0 0; width: min(84vw, 300px); transform: translateX(-102%); transition: transform .2s ease; visibility: visible !important; }
+  .app.sb-open .sidebar { transform: none; }
+  .app.sb-open .scrim { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, .55); }
+  #btn-sidebar-open { display: inline-grid !important; }
+  #btn-collapse { display: none; }
+  .chat-item .mini { display: grid; }
+  .set-wrap { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .set-tabs { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; padding: 8px; }
+  .set-tab { white-space: nowrap; }
+  .set-body { padding: 16px; }
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  dialog.settings { width: 100vw; height: 100dvh; border-radius: 0; border: 0; }
+  .ta.sp { height: 50dvh; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="대화방 목록">
+    <div class="sb-head">
+      <button class="btn-new" id="btn-new-chat" type="button"><svg class="i"><use href="#i-plus"/></svg>새 대화</button>
+      <button class="icon-btn" id="btn-collapse" type="button" title="사이드바 접기" aria-label="사이드바 접기"><svg class="i"><use href="#i-panel"/></svg></button>
+    </div>
+    <div class="sb-label">대화</div>
+    <nav class="sb-list" id="chat-list"></nav>
+    <div class="sb-foot">
+      <button class="sb-btn" id="btn-settings-side" type="button"><svg class="i"><use href="#i-gear"/></svg>설정</button>
+      <div class="ref-status" id="ref-status"></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="btn-sidebar-open" type="button" title="대화방 목록" aria-label="대화방 목록 열기"><svg class="i"><use href="#i-panel"/></svg></button>
+      <div class="chat-title" id="chat-title"></div>
+    </header>
+    <div class="banner" id="banner" role="status"></div>
+    <section class="messages" id="messages" aria-live="polite">
+      <div class="thread" id="thread"></div>
+    </section>
+    <footer class="composer-wrap">
+      <form class="composer" id="composer">
+        <div class="attach-tray" id="attach-tray" hidden></div>
+        <div class="composer-row">
+          <button class="icon-btn attach-btn" id="btn-attach" type="button" title="이미지 첨부" aria-label="이미지 첨부"><svg class="i"><use href="#i-clip"/></svg></button>
+          <label class="sr-only" for="input">요청 입력</label>
+          <textarea id="input" rows="1" placeholder="원하는 장면이나 수정 요청을 입력하세요" autocomplete="off"></textarea>
+          <button class="send-btn" id="btn-send" type="submit" title="전송 (Enter)" aria-label="전송"><svg class="i"><use href="#i-up"/></svg></button>
+        </div>
+      </form>
+      <input type="file" id="img-file" accept="image/*" multiple hidden>
+      <div class="composer-hint" id="composer-hint">Enter 전송 · Shift+Enter 줄바꿈</div>
+    </footer>
+  </main>
+</div>
+
+<dialog class="lightbox" id="lightbox" aria-label="이미지 크게 보기"><img alt="첨부 이미지"></dialog>
+
+<dialog class="settings" id="settings" aria-labelledby="set-title">
+  <form method="dialog" class="set-wrap" id="settings-form" autocomplete="off">
+    <div class="set-head">
+      <h2 id="set-title">설정</h2>
+      <button class="icon-btn" type="button" id="set-close" aria-label="닫기"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="set-tabs" role="tablist">
+      <button class="set-tab" type="button" role="tab" data-tab="prompt" aria-selected="true">프롬프트</button>
+      <button class="set-tab" type="button" role="tab" data-tab="reference" aria-selected="false">참조 데이터</button>
+      <button class="set-tab" type="button" role="tab" data-tab="api" aria-selected="false">API / 프록시</button>
+      <button class="set-tab" type="button" role="tab" data-tab="advanced" aria-selected="false">고급 / 진단</button>
+    </div>
+    <div class="set-body">
+
+      <!-- 프롬프트 -->
+      <div class="set-panel active" data-panel="prompt" role="tabpanel">
+        <div class="section">
+          <h3>System Prompt</h3>
+          <p class="desc">모든 생성 요청의 첫 system 메시지로 <b>원문 그대로</b> 전달됩니다. 앱은 내용을 요약·교정·삭제하지 않습니다.</p>
+          <textarea class="ta mono sp" id="sp-text" data-bind="systemPrompt" spellcheck="false"></textarea>
+          <div class="row">
+            <span class="counter" id="sp-count"></span>
+            <span style="flex:1"></span>
+            <button class="btn" type="button" id="sp-import"><svg class="i"><use href="#i-upload"/></svg>불러오기 (.txt/.md)</button>
+            <button class="btn" type="button" id="sp-export-txt"><svg class="i"><use href="#i-download"/></svg>.txt</button>
+            <button class="btn" type="button" id="sp-export-md"><svg class="i"><use href="#i-download"/></svg>.md</button>
+            <button class="btn" type="button" id="sp-reset">기본값 복원</button>
+            <button class="btn" type="button" id="sp-lint-btn">지시사항 점검</button>
+          </div>
+          <input type="file" id="sp-file" accept=".txt,.md,text/plain,text/markdown" hidden>
+          <div class="lint" id="sp-lint"></div>
+          <p class="hint">저장·취소는 아래 버튼으로 합니다. 지시사항 점검은 경고만 표시하며 원문을 고치지 않습니다.</p>
+        </div>
+      </div>
+
+      <!-- 참조 데이터 -->
+      <div class="set-panel" data-panel="reference" role="tabpanel">
+        <div class="section">
+          <h3>참조 CSV</h3>
+          <p class="desc">헤더 없는 4열 CSV(tag, category, usage_count, aliases). 파일은 이 브라우저에만 저장되고 로컬에서 검색됩니다. 요청마다 관련 후보만 모델에 전달하며, 파일 전체는 보내지 않습니다. 업로드·교체·제거는 저장 버튼 없이 바로 적용됩니다.</p>
+          <div class="card">
+            <dl class="kv" id="ref-meta"></dl>
+            <div class="progress" id="ref-progress" hidden style="margin-top:12px"><i></i></div>
+          </div>
+          <div class="drop" id="ref-drop">CSV 파일을 여기에 끌어다 놓거나 <b>업로드</b>를 누르세요</div>
+          <div class="row">
+            <button class="btn" type="button" id="ref-upload"><svg class="i"><use href="#i-upload"/></svg>CSV 업로드 / 교체</button>
+            <button class="btn" type="button" id="ref-rebuild">인덱스 다시 만들기</button>
+            <button class="btn danger" type="button" id="ref-remove">제거</button>
+          </div>
+          <input type="file" id="ref-file" accept=".csv,text/csv,text/plain" hidden>
+        </div>
+        <div class="section">
+          <h3>검색 테스트</h3>
+          <div class="row">
+            <input class="inp" id="ref-test-q" placeholder="예: leaning on desk, 1girls, heda down" style="flex:1;min-width:200px">
+            <button class="btn" type="button" id="ref-test-btn">검색</button>
+          </div>
+          <div id="ref-test-out"></div>
+        </div>
+        <div class="section">
+          <h3>검색 · Query Planner</h3>
+          <div class="grid3">
+            <div class="field"><label for="f-perkw">키워드당 후보 수</label><input class="inp" id="f-perkw" type="number" min="1" max="50" data-bind="retrieval.perKeyword"></div>
+            <div class="field"><label for="f-maxtotal">최대 후보 수 (중복 제거 후)</label><input class="inp" id="f-maxtotal" type="number" min="10" max="500" data-bind="retrieval.maxTotal"></div>
+            <div class="field"><label for="f-plmax">Planner 최대 출력 토큰</label><input class="inp" id="f-plmax" type="number" min="64" max="8192" data-bind="planner.maxTokens"></div>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="planner.enabled"><span>Query Planner 사용<span class="sub">한국어 요청을 영어 검색 키워드로 바꾸는 짧은 API 호출을 먼저 보냅니다. 결과는 화면에 표시하지 않습니다.</span></span></label>
+          <div class="field"><label for="f-plmodel">Planner 모델 ID <span class="sub">(비우면 기본 모델 사용 · 저렴한 모델 지정 가능)</span></label><input class="inp mono" id="f-plmodel" data-bind="planner.modelId" placeholder="같은 엔드포인트의 다른 모델 ID"></div>
+          <label class="check"><input type="checkbox" data-bind="retrieval.includeInputTerms"><span>입력에 포함된 영어/태그 표현도 직접 검색</span></label>
+        </div>
+      </div>
+
+      <!-- API / 프록시 -->
+      <div class="set-panel" data-panel="api" role="tabpanel">
+        <div class="section">
+          <h3>모델</h3>
+          <div class="grid2">
+            <div class="field"><label for="f-name">모델 이름 <span class="sub">(표시용)</span></label><input class="inp" id="f-name" data-bind="api.name" placeholder="예: GPT 메인"></div>
+            <div class="field"><label for="f-model">모델 ID <span class="sub">(API 호출용)</span></label><input class="inp mono" id="f-model" data-bind="api.modelId" placeholder="예: gpt-4.1-mini, qwen2.5-7b-instruct"></div>
+          </div>
+          <div class="field"><label for="f-url">API URL <span class="sub">(원본 엔드포인트)</span></label><input class="inp mono" id="f-url" data-bind="api.url" placeholder="https://api.openai.com/v1/chat/completions · http://localhost:1234/v1"><div class="hint" id="url-preview"></div></div>
+          <div class="field"><label for="f-key">API 키</label>
+            <div class="secret"><input class="inp mono" id="f-key" type="password" data-bind="api.apiKey" placeholder="로컬 서버(LM Studio·Ollama)는 비워 두세요" autocomplete="off" spellcheck="false"><button class="btn" type="button" data-reveal="f-key" aria-label="API 키 보기"><svg class="i"><use href="#i-eye"/></svg></button></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label for="f-format">API 형식</label><select class="sel" id="f-format" data-bind="api.format"><option value="openai">OpenAI Compatible</option></select></div>
+            <div class="field"><label for="f-mode">API 방식</label><select class="sel" id="f-mode" data-bind="api.mode"><option value="auto">자동 감지 (/v1 → /v1/chat/completions 보정)</option><option value="raw">URL 그대로 사용</option></select></div>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="api.allowNoKey"><span>API 키 없음 허용<span class="sub">localhost·127.0.0.1·::1·사설망 주소는 자동으로 허용됩니다. 키가 없으면 Authorization 헤더를 아예 보내지 않습니다.</span></span></label>
+        </div>
+        <div class="section">
+          <h3>추론 설정</h3>
+          <p class="desc">추론(thinking) 모델용 설정입니다. "보내지 않음"이면 요청에 넣지 않습니다. 모델이 지원하지 않는 값을 넣으면 오류가 날 수 있으니 [모델 진단]으로 확인하세요.</p>
+          <div class="grid3">
+            <div class="field"><label for="f-effort">Reasoning Effort</label><select class="sel" id="f-effort" data-bind="generation.reasoningEffort"><option value="">보내지 않음</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+            <div class="field"><label for="f-tlevel">Thinking Level <span class="sub">(Gemini)</span></label><select class="sel" id="f-tlevel" data-bind="generation.thinkingLevel"><option value="">보내지 않음</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+            <div class="field"><label for="f-tbudget">Thinking Budget Tokens <span class="sub">(0 = 보내지 않음)</span></label><input class="inp" id="f-tbudget" type="number" min="0" data-bind="generation.thinkingBudget"></div>
+          </div>
+          <p class="hint">Reasoning Effort는 reasoning_effort 필드로 보냅니다(OpenAI o·GPT-5 계열, Gemini OpenAI 호환 등). Thinking Level / Budget은 모델 ID로 공급자를 알 수 있을 때만 보냅니다 (Gemini: extra_body.google.thinking_config, Claude: thinking.budget_tokens). 다른 공급자는 고급 / 진단 › 추가 body JSON을 사용하세요.</p>
+        </div>
+        <div class="section">
+          <h3>프록시</h3>
+          <p class="desc">브라우저가 CORS 때문에 원본 API를 직접 호출하지 못할 때 사용합니다. 요청 body의 model 값은 위 모델 ID를 그대로 사용합니다.</p>
+          <label class="check"><input type="checkbox" id="f-proxy-on" data-bind="proxy.enabled"><span>프록시 사용</span></label>
+          <div class="field"><label for="f-purl">프록시 URL</label><input class="inp mono" id="f-purl" data-bind="proxy.url" placeholder="https://your-proxy.workers.dev/v1/chat/completions"></div>
+          <div class="field"><label for="f-ptok">프록시 토큰</label>
+            <div class="secret"><input class="inp mono" id="f-ptok" type="password" data-bind="proxy.token" autocomplete="off" spellcheck="false" placeholder="LUMOS_PROXY_TOKEN 등"><button class="btn" type="button" data-reveal="f-ptok" aria-label="프록시 토큰 보기"><svg class="i"><use href="#i-eye"/></svg></button></div>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="proxy.forwardApiKey"><span>원본 API 키도 프록시로 전달<span class="sub">프록시가 원본 키를 요구할 때만 켜세요. X-Lumos-Upstream-Authorization 헤더로 보냅니다.</span></span></label>
+        </div>
+        <div class="section">
+          <h3>이미지 입력 (비전)</h3>
+          <p class="desc">입력창의 클립 버튼·붙여넣기·끌어다 놓기로 이미지를 첨부할 수 있습니다. 비전 모델에서만 동작하며, 보내기 전에 크기를 줄여 JPEG로 바꿉니다(원본은 저장하지 않음). 지원 여부는 [모델 진단]에서 확인할 수 있습니다.</p>
+          <div class="grid3">
+            <div class="field"><label for="f-vmax">긴 변 최대 크기 (px)</label><input class="inp" id="f-vmax" type="number" min="256" max="4096" step="64" data-bind="vision.maxSide"></div>
+            <div class="field"><label for="f-vcount">메시지당 최대 이미지 수</label><input class="inp" id="f-vcount" type="number" min="1" max="10" data-bind="vision.maxImages"></div>
+            <div class="field"><label for="f-vdetail">image detail <span class="sub">(OpenAI 계열)</span></label><select class="sel" id="f-vdetail" data-bind="vision.detail"><option value="">보내지 않음</option><option value="auto">auto</option><option value="low">low</option><option value="high">high</option></select></div>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="vision.plannerImages"><span>Query Planner에도 이미지 전송<span class="sub">이미지에서 바로 태그 검색어를 뽑습니다. 끄면 글 내용만으로 검색합니다.</span></span></label>
+          <label class="check"><input type="checkbox" data-bind="vision.resendHistoryImages"><span>후속 요청에도 이전 이미지를 다시 전송<span class="sub">기본은 첫 분석 때만 보내고, 이후 수정은 직전 완성 프롬프트를 기준으로 합니다. 켜면 정확도는 오를 수 있지만 매 요청 비용이 늘어납니다.</span></span></label>
+        </div>
+        <div class="section">
+          <h3>실제 전송 정보</h3>
+          <div class="cred" id="cred-summary"></div>
+        </div>
+      </div>
+
+      <!-- 고급 / 진단 -->
+      <div class="set-panel" data-panel="advanced" role="tabpanel">
+        <div class="section">
+          <h3>진단 결과</h3>
+          <div class="diag" id="diag-out"><p class="hint">아래 [연결 테스트] [권장 설정 점검] [모델 진단] 결과가 여기에 표시됩니다. 진단은 현재 입력 중인 설정으로 실행하며, 설정을 자동으로 바꾸지 않습니다.</p></div>
+        </div>
+        <details class="adv">
+          <summary>고급 API 호환 옵션</summary>
+          <div class="section">
+            <div class="grid2">
+              <label class="check"><input type="checkbox" data-bind="generation.stream"><span>스트리밍 사용</span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.streamFallback"><span>스트리밍 실패 시 일반 요청으로 재시도</span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.keepPartialOnCancel"><span>중지 시 부분 출력 화면에 보존<span class="sub">보존해도 직전 완성 프롬프트로는 쓰지 않습니다.</span></span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.hasFirstSystemPrompt"><span>hasFirstSystemPrompt<span class="sub">system 메시지를 맨 앞 하나로 합칩니다 (참조 블록 포함).</span></span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.requiresAlternateRole"><span>requiresAlternateRole<span class="sub">같은 역할이 연속되면 하나로 합칩니다.</span></span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.mustStartWithUserInput"><span>mustStartWithUserInput<span class="sub">system 다음 첫 메시지를 user로 맞춥니다.</span></span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.systemAsUser"><span>system 역할 미지원<span class="sub">system 내용을 첫 user 메시지로 보냅니다.</span></span></label>
+              <label class="check"><input type="checkbox" data-bind="generation.useMaxTokens"><span>최대 출력 토큰 전송</span></label>
+            </div>
+            <div class="grid3">
+              <div class="field"><label for="f-maxtok">max_output_tokens 값</label><input class="inp" id="f-maxtok" type="number" min="1" data-bind="generation.maxTokens"></div>
+              <div class="field"><label for="f-tokparam">토큰 파라미터</label><select class="sel" id="f-tokparam" data-bind="generation.tokenParam"><option value="auto">자동 (모델 ID 기준)</option><option value="max_tokens">max_tokens</option><option value="max_completion_tokens">max_completion_tokens</option><option value="max_output_tokens">max_output_tokens</option><option value="none">보내지 않음</option></select></div>
+              <div class="field"><label for="f-timeout">타임아웃 (초)</label><input class="inp" id="f-timeout" type="number" min="5" max="1800" data-bind="generation.timeoutSec"></div>
+              <div class="field"><label for="f-temp">Temperature <span class="sub">(비우면 보내지 않음)</span></label><input class="inp" id="f-temp" inputmode="decimal" data-bind="generation.temperature" data-type="numstr"></div>
+            </div>
+            <div class="field"><label for="f-extra">추가 body JSON <span class="sub">(공급자 전용 필드. messages/stream은 덮어쓰지 않음)</span></label><textarea class="ta mono" id="f-extra" rows="3" data-bind="generation.extraBody" placeholder='{"top_p": 0.9}' spellcheck="false"></textarea></div>
+          </div>
+        </details>
+        <details class="adv">
+          <summary>대화 맥락 · 출력 검증 · 디버그</summary>
+          <div class="section">
+            <div class="grid3">
+              <div class="field"><label for="f-turns">맥락에 넣을 최대 턴 수</label><input class="inp" id="f-turns" type="number" min="1" max="100" data-bind="context.maxTurns"></div>
+              <div class="field"><label for="f-budget">대화 맥락 글자 예산</label><input class="inp" id="f-budget" type="number" min="1000" step="1000" data-bind="context.charBudget"></div>
+              <div class="field"><label for="f-toklimit">토큰 경고 기준 <span class="sub">(추정치)</span></label><input class="inp" id="f-toklimit" type="number" min="0" data-bind="validation.tokenLimit"></div>
+            </div>
+            <p class="hint">예산을 넘으면 오래된 대화부터 뺍니다. 직전 완성 프롬프트가 있는 마지막 턴은 항상 포함합니다.</p>
+            <label class="check"><input type="checkbox" data-bind="validation.enabled"><span>출력 후 로컬 검증<span class="sub">빈 응답, 오류 문구, 중복 태그, CSV에 없는 태그를 경고로만 표시합니다. 응답을 고치지 않습니다.</span></span></label>
+            <label class="check"><input type="checkbox" data-bind="debug"><span>디버그 표시<span class="sub">검색 키워드, 후보 수, 엔드포인트 종류, 요청·응답 시간. API 키/토큰은 표시하지 않습니다.</span></span></label>
+          </div>
+        </details>
+        <details class="adv">
+          <summary>설정 내보내기 / 가져오기</summary>
+          <div class="section">
+            <label class="check"><input type="checkbox" id="exp-secrets"><span>API 키·프록시 토큰 포함<span class="sub">기본값은 제외입니다. 포함하면 파일을 안전하게 보관하세요.</span></span></label>
+            <div class="row">
+              <button class="btn" type="button" id="exp-btn"><svg class="i"><use href="#i-download"/></svg>설정 내보내기 (.json)</button>
+              <button class="btn" type="button" id="imp-btn"><svg class="i"><use href="#i-upload"/></svg>설정 가져오기</button>
+            </div>
+            <input type="file" id="imp-file" accept=".json,application/json" hidden>
+            <p class="hint">가져온 설정은 입력란에만 채워지며, [저장]을 눌러야 적용됩니다. 파일에 키가 없으면 현재 키를 유지합니다.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="set-foot">
+      <button class="btn" type="button" id="btn-conn-test">연결 테스트</button>
+      <button class="btn" type="button" id="btn-reco">권장 설정 점검</button>
+      <button class="btn" type="button" id="btn-diag">모델 진단</button>
+      <span class="grow"></span>
+      <span class="dirty" id="set-dirty"></span>
+      <button class="btn" type="button" id="set-cancel">취소</button>
+      <button class="btn primary" type="button" id="set-save">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="js/tag-engine.js"></script>
+<script src="js/core.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/reference.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
