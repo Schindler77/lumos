@@ -397,31 +397,61 @@ async function lastAssistant(page) { return page.locator('.msg.assistant').last(
     await send(page, '해변에 누워 있는 소녀');
     const gf3 = srv.log.find((r) => r.kind === 'final');
     check('대화 고정: 같은 대화에서 모델 변경은 허용', gf3 && gf3.url === '/v1/chat/completions' && gf3.body.messages[0].content.startsWith('B RULES') && !(await page.isVisible('#prompt-guard')));
-    // [저장] = 선택한 프리셋 덮어쓰기
+    // [저장] = 선택한 프리셋 덮어쓰기 → 기존 대화는 예전 내용(사본)으로, 안내 팝업
+    const vChatTitle = await page.textContent('#chat-title');
     await openSettings(page, 'prompt');
     await page.fill('#sp-text', 'B RULES 지시사항 (수정)');
     await page.click('#set-save');
     await page.waitForFunction(() => !document.getElementById('settings').open);
+    await page.waitForFunction(() => document.getElementById('prompt-notice').open);
+    const pn = await page.innerText('#prompt-notice');
+    check('수정된 지시사항: 기존 대화 들어가면 안내 팝업', pn.includes('예전 내용으로 진행 중') && pn.includes('이전 지시사항으로 계속') && pn.includes('새 대화 만들기'));
+    await page.click('#pn-details summary');
+    check('안내 팝업: 적용 중인 예전 내용 보기', (await page.innerText('#pn-text')) === 'B RULES 지시사항');
+    await page.screenshot({ path: path.join(shotDir, '14-prompt-notice.png') });
+    await page.click('#pn-continue');
+    check('[이전 지시사항으로 계속] → 팝업 닫힘 + 상단 "예전 버전"', !(await page.evaluate(() => document.getElementById('prompt-notice').open)) && (await page.innerText('#ctx-chips')).includes('예전 버전'));
     srv.log.length = 0;
     await send(page, '해변에 누워 있는 소녀');
     const gf4 = srv.log.find((r) => r.kind === 'final');
-    check('지시사항 [저장] → 선택한 프리셋에 덮어쓰기, 같은 대화에 적용', gf4 && gf4.body.messages[0].content.startsWith('B RULES 지시사항 (수정)'));
-    // 묶인 프리셋 삭제 → 새 대화로만
+    check('예전 버전으로 계속: 예전 내용으로 전송', gf4 && gf4.body.messages[0].content.startsWith('B RULES 지시사항') && !gf4.body.messages[0].content.includes('(수정)'));
+    // 다른 대화 갔다 오면 다시 안 뜸
+    await page.locator('.chat-item .open').last().click();
+    await page.waitForTimeout(200);
+    if (await page.evaluate(() => document.getElementById('prompt-notice').open)) await page.click('#pn-continue');
+    await page.locator('.chat-item .open', { hasText: vChatTitle }).first().click();
+    await page.waitForTimeout(200);
+    check('계속을 고른 대화는 다시 들어가도 팝업 없음', !(await page.evaluate(() => document.getElementById('prompt-notice').open)));
+    // 상단 표시를 누르면 안내 → 새 대화 만들기 → 수정된 내용 적용
+    const ccBefore = await page.locator('.chat-item').count();
+    await page.click('#ctx-chips .ctx-chip.warn');
+    await page.waitForFunction(() => document.getElementById('prompt-notice').open);
+    await page.click('#pn-new');
+    srv.log.length = 0;
+    await send(page, '해변에 누워 있는 소녀');
+    const gf5 = srv.log.find((r) => r.kind === 'final');
+    check('[새 대화 만들기] → 수정된 내용으로 새 대화', gf5 && gf5.body.messages[0].content.startsWith('B RULES 지시사항 (수정)') && (await page.locator('.chat-item').count()) === ccBefore + 1);
+    // 묶인 프리셋 삭제 → 저장된 내용으로 계속 가능 (팝업)
     await openSettings(page, 'prompt');
     page.once('dialog', (d) => d.accept());
     await page.click('#sp-preset-delete');
     await page.waitForFunction(() => document.querySelectorAll('#sp-preset-select option').length === 1);
     await page.click('#set-cancel');
     await page.waitForFunction(() => !document.getElementById('settings').open);
-    const guardDel = await page.innerText('#prompt-guard');
-    check('삭제된 지시사항 대화: 새 대화만 안내', guardDel.includes('삭제') && !guardDel.includes('되돌리기') && (await page.locator('#ctx-chips .ctx-chip.bad').count()) === 1);
+    await page.waitForFunction(() => document.getElementById('prompt-notice').open);
+    check('삭제된 지시사항 대화: 팝업 안내', (await page.innerText('#prompt-notice')).includes('삭제된'));
+    await page.click('#pn-continue');
+    srv.log.length = 0;
+    await send(page, '해변에 누워 있는 소녀');
+    const gf6 = srv.log.find((r) => r.kind === 'final');
+    check('삭제된 지시사항 대화: 저장된 내용으로 계속', gf6 && gf6.body.messages[0].content.startsWith('B RULES 지시사항 (수정)') && (await page.innerText('#ctx-chips')).includes('(삭제됨)'));
 
     // 새로고침 후 유지
     const chatCount = await page.locator('.chat-item').count();
     await page.reload();
     await page.waitForFunction(() => /행$/.test(document.getElementById('ref-status').textContent), null, { timeout: 30000 });
-    check('새로고침 후 대화·참조 CSV 유지', (await page.locator('.chat-item').count()) === chatCount && chatCount === 5);
-    check('새로고침 후 대화 고정 유지', (await page.innerText('#prompt-guard')).includes('삭제'));
+    check('새로고침 후 대화·참조 CSV 유지', (await page.locator('.chat-item').count()) === chatCount && chatCount === 6);
+    check('새로고침 후 대화 사본·확인 유지', (await page.innerText('#ctx-chips')).includes('(삭제됨)') && !(await page.evaluate(() => document.getElementById('prompt-notice').open)));
     check('새로고침 후 첨부 이미지 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('chats').objectStore('chats').getAll(); g.onsuccess = () => res(g.result.some((c) => c.messages.some((m) => m.images && m.images[0] && /^data:image\/jpeg/.test(m.images[0].dataUrl)))); }; })));
     check('새로고침 후 프리셋 유지', (await page.locator('#preset-quick option').count()) === 2);
     check('새로고침 후 설정 유지', await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('nai-prompt-generator'); r.onsuccess = () => { const g = r.result.transaction('kv').objectStore('kv').get('settings'); g.onsuccess = () => res(g.result.api.modelId === 'mock-model'); }; })));

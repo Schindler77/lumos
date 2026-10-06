@@ -563,10 +563,40 @@ test('chatPromptStatus: unbound / ok / mismatch / deleted', () => {
   const mm = C.chatPromptStatus(s, { promptPresetId: b.id });
   assert.equal(mm.state, 'mismatch');
   assert.equal(mm.bound.name, 'B');
-  const del = C.chatPromptStatus(s, { promptPresetId: 'gone', promptPresetName: '옛 지시사항' });
-  assert.equal(del.state, 'deleted');
-  assert.equal(del.boundName, '옛 지시사항');
+  const lost = C.chatPromptStatus(s, { promptPresetId: 'gone', promptPresetName: '옛 지시사항' });
+  assert.equal(lost.state, 'lost');
+  assert.equal(lost.blocked, true);
+  assert.equal(lost.name, '옛 지시사항');
+  assert.equal(mm.blocked, true);
   // 모델 프리셋을 바꿔도 프롬프트 상태는 그대로
   const mp = C.presetFromSettings(settings({ api: { modelId: 'other' } }), 'M');
   assert.equal(C.chatPromptStatus(C.applyPreset(s, mp), { promptPresetId: a.id }).state, 'ok');
+});
+
+test('대화방 사본: 같은 프리셋 수정 → outdated(예전 내용으로 계속), 삭제 → deleted(사본으로 계속)', () => {
+  const s = C.ensurePromptPresets(settings());
+  const a = s.promptPresets[0];
+  const chat = { promptPresetId: a.id, promptSnapshot: C.promptSnapshot(a) };
+  assert.equal(C.chatPromptStatus(s, chat).state, 'ok');
+  // 프리셋 1 → 1-1 로 수정
+  a.text = a.text + '\n추가 규칙';
+  const st = C.chatPromptStatus(s, chat);
+  assert.equal(st.state, 'outdated');
+  assert.equal(st.blocked, false);
+  assert.equal(st.needsNotice, true);
+  assert.ok(!st.text.includes('추가 규칙'));       // 예전 사본 사용
+  chat.promptAck = st.ackKey;                        // [이전 지시사항으로 계속]
+  assert.equal(C.chatPromptStatus(s, chat).needsNotice, false);
+  a.text += '\n또 수정';                             // 1-2 로 다시 수정 → 다시 안내
+  assert.equal(C.chatPromptStatus(s, chat).needsNotice, true);
+  // 삭제 → 사본으로 계속
+  const b = C.makePromptPreset('B', 'B');
+  s.promptPresets = [b];
+  C.ensurePromptPresets(s);
+  const del = C.chatPromptStatus(s, chat);
+  assert.equal(del.state, 'deleted');
+  assert.equal(del.blocked, false);
+  assert.equal(del.needsNotice, true);
+  assert.equal(del.name, a.name);
+  assert.equal(del.text, chat.promptSnapshot.text);
 });

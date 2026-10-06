@@ -204,17 +204,43 @@
 
   /*
    * 대화방 ↔ 프롬프트 프리셋 관계
-   *   unbound  : 아직 묶이지 않음 (새 대화, 기능 이전 대화) → 보내면 활성 프리셋으로 묶음
-   *   ok       : 묶인 프리셋 = 활성 프리셋
+   * 대화방은 처음 보낼 때의 지시사항 내용을 사본(chat.promptSnapshot)으로 갖고, 끝까지 그 사본으로 진행한다.
+   *   unbound  : 아직 묶이지 않음 (새 대화, 기능 이전 대화) → 보내면 활성 프리셋 사본으로 묶음
+   *   ok       : 묶인 프리셋 = 활성 프리셋, 내용도 같음
+   *   outdated : 같은 프리셋인데 이후 내용이 수정됨 → 예전 사본으로 계속 가능 (안내 1회)
+   *   deleted  : 묶인 프리셋이 삭제됨 → 사본으로 계속 가능 (안내 1회)
    *   mismatch : 다른 프리셋이 선택됨 → 전송 차단
-   *   deleted  : 묶인 프리셋이 삭제됨 → 새 대화로만 진행
+   *   lost     : 삭제됐고 사본도 없음 (사본 기능 이전 대화) → 새 대화로만
    */
+  function promptSnapshot(preset) {
+    return { presetId: preset.id, name: preset.name, text: preset.text, savedAt: Date.now() };
+  }
+
   function chatPromptStatus(settings, chat) {
     var active = findPromptPreset(settings, settings.activePromptPresetId);
-    if (!chat || !chat.promptPresetId) return { state: 'unbound', active: active, bound: null };
+    var out = { state: 'unbound', active: active, bound: null, name: '', text: '', ackKey: '', needsNotice: false, blocked: false };
+    if (!chat || !chat.promptPresetId) return out;
+    var snap = chat.promptSnapshot && chat.promptSnapshot.presetId === chat.promptPresetId ? chat.promptSnapshot : null;
     var bound = findPromptPreset(settings, chat.promptPresetId);
-    if (!bound) return { state: 'deleted', active: active, bound: null, boundName: chat.promptPresetName || '' };
-    return { state: active && bound.id === active.id ? 'ok' : 'mismatch', active: active, bound: bound };
+    out.bound = bound;
+    out.name = bound ? bound.name : (snap && snap.name) || chat.promptPresetName || '';
+    if (!bound) {
+      if (!snap) { out.state = 'lost'; out.blocked = true; return out; }
+      out.state = 'deleted';
+      out.text = snap.text;
+      out.ackKey = 'deleted';
+    } else if (!active || bound.id !== active.id) {
+      out.state = 'mismatch';
+      out.blocked = true;
+      out.text = snap ? snap.text : bound.text;
+      return out;
+    } else {
+      out.text = snap ? snap.text : bound.text;
+      if (snap && snap.text !== bound.text) { out.state = 'outdated'; out.ackKey = 'v:' + hashString(bound.text); }
+      else { out.state = 'ok'; return out; }
+    }
+    out.needsNotice = chat.promptAck !== out.ackKey;
+    return out;
   }
 
   function findPreset(settings, id) {
@@ -1160,7 +1186,7 @@
     clone: clone, mergeDefaults: mergeDefaults, exportSettings: exportSettings,
     PRESET_KEYS: PRESET_KEYS, presetFromSettings: presetFromSettings, applyPreset: applyPreset,
     findPromptPreset: findPromptPreset, makePromptPreset: makePromptPreset, ensurePromptPresets: ensurePromptPresets,
-    selectPromptPreset: selectPromptPreset, chatPromptStatus: chatPromptStatus,
+    selectPromptPreset: selectPromptPreset, chatPromptStatus: chatPromptStatus, promptSnapshot: promptSnapshot,
     presetMatches: presetMatches, findPreset: findPreset,
     parseUrl: parseUrl, hostKind: hostKind, isLocalKind: isLocalKind,
     resolveApiUrl: resolveApiUrl, modelsUrlFrom: modelsUrlFrom, stripBearer: stripBearer,

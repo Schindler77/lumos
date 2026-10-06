@@ -179,6 +179,15 @@ svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none;
 .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .thumb { padding: 0; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--bg); cursor: zoom-in; height: 150px; max-width: min(260px, 100%); }
 .thumb img { height: 100%; width: auto; max-width: 100%; object-fit: cover; display: block; }
+dialog.notice { width: min(520px, calc(100vw - 32px)); padding: 20px; border: 1px solid #6b5413; border-radius: 16px; background: var(--panel); color: var(--text); display: none; }
+dialog.notice[open] { display: grid; gap: 12px; }
+dialog.notice::backdrop { background: rgba(0, 0, 0, .6); }
+dialog.notice h3 { margin: 0; font-size: 16px; color: var(--warn); }
+dialog.notice p { margin: 0; line-height: 1.7; color: var(--text-2); }
+dialog.notice details { border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
+dialog.notice summary { cursor: pointer; padding: 10px 0; font-size: 13px; color: var(--muted); }
+dialog.notice pre { margin: 0 0 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+dialog.notice .row { justify-content: flex-end; }
 dialog.lightbox { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 94dvh; overflow: visible; }
 dialog.lightbox::backdrop { background: rgba(0, 0, 0, .85); }
 dialog.lightbox img { display: block; max-width: 96vw; max-height: 94dvh; object-fit: contain; border-radius: 8px; cursor: zoom-out; }
@@ -353,6 +362,16 @@ details.adv > .section { padding-bottom: 14px; }
 
 <dialog class="lightbox" id="lightbox" aria-label="이미지 크게 보기"><img alt="첨부 이미지"></dialog>
 
+<dialog class="notice" id="prompt-notice" aria-labelledby="pn-title">
+  <h3 id="pn-title">지시사항 안내</h3>
+  <p id="pn-msg"></p>
+  <details id="pn-details"><summary>이 대화에 적용 중인 내용 보기</summary><pre id="pn-text"></pre></details>
+  <div class="row">
+    <button class="btn" type="button" id="pn-continue">이전 지시사항으로 계속</button>
+    <button class="btn primary" type="button" id="pn-new">새 대화 만들기</button>
+  </div>
+</dialog>
+
 <dialog class="settings" id="settings" aria-labelledby="set-title">
   <form method="dialog" class="set-wrap" id="settings-form" autocomplete="off">
     <div class="set-head">
@@ -382,7 +401,7 @@ details.adv > .section { padding-bottom: 14px; }
             <button class="btn" type="button" id="sp-preset-rename"><svg class="i"><use href="#i-edit"/></svg>이름 변경</button>
             <button class="btn danger" type="button" id="sp-preset-delete"><svg class="i"><use href="#i-trash"/></svg>삭제</button>
           </div>
-          <p class="hint">아래 내용을 고치고 [저장]을 누르면 선택한 프리셋에 덮어씁니다. 다른 이름으로 남기려면 [새 프리셋으로 저장]을 누르세요(바로 저장됨). 프리셋 내용을 고치면 그 프리셋을 쓰는 기존 대화에도 적용됩니다.</p>
+          <p class="hint">아래 내용을 고치고 [저장]을 누르면 선택한 프리셋에 덮어씁니다. 다른 이름으로 남기려면 [새 프리셋으로 저장]을 누르세요(바로 저장됨). 기존 대화는 시작할 때의 내용으로 계속 진행되고, 고친 내용은 새 대화부터 적용됩니다.</p>
         </div>
         <div class="section">
           <h3>System Prompt</h3>

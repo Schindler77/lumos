@@ -125,6 +125,7 @@
     renderThread(true);
     loadDraft();
     $('input').focus();
+    maybeShowPromptNotice();
   }
 
   function newChat() { selectChat(null); }
@@ -198,44 +199,83 @@
     var chat = currentChat();
     var ps = C.chatPromptStatus(S.settings, chat);
     var chips = $('ctx-chips');
-    var spName, spCls = 'ctx-chip', spTitle;
-    if (ps.state === 'mismatch') { spName = ps.bound.name; spCls += ' warn'; spTitle = '이 대화의 지시사항: ' + ps.bound.name + ' (지금 선택: ' + (ps.active ? ps.active.name : '-') + ')'; }
-    else if (ps.state === 'deleted') { spName = '(삭제됨) ' + (ps.boundName || ''); spCls += ' bad'; spTitle = '이 대화에 쓰인 지시사항이 삭제되었습니다'; }
+    var spName, spCls = 'ctx-chip', spTitle, spClick = function () { openSettings('prompt'); };
+    if (ps.state === 'mismatch') { spName = ps.name; spCls += ' warn'; spTitle = '이 대화의 지시사항: ' + ps.name + ' (지금 선택: ' + (ps.active ? ps.active.name : '-') + ')'; }
+    else if (ps.state === 'lost') { spName = '(삭제됨) ' + ps.name; spCls += ' bad'; spTitle = '이 대화에 쓰인 지시사항이 삭제되었습니다'; }
+    else if (ps.state === 'outdated') { spName = ps.name + ' (예전 버전)'; spCls += ' warn'; spTitle = '이 대화는 「' + ps.name + '」의 예전 내용으로 진행 중입니다'; spClick = function () { openPromptNotice(chat); }; }
+    else if (ps.state === 'deleted') { spName = '(삭제됨) ' + ps.name; spCls += ' warn'; spTitle = '이 대화는 삭제된 「' + ps.name + '」의 저장된 내용으로 진행 중입니다'; spClick = function () { openPromptNotice(chat); }; }
     else { spName = ps.active ? ps.active.name : '-'; spTitle = '지시사항: ' + spName; }
     var ml = modelLabel();
     chips.replaceChildren(
-      el('button', { class: spCls, type: 'button', title: spTitle, onclick: function () { openSettings('prompt'); } }, el('span', { class: 'k', text: '지시사항' }), el('span', { class: 'v', text: spName })),
+      el('button', { class: spCls, type: 'button', title: spTitle, onclick: spClick }, el('span', { class: 'k', text: '지시사항' }), el('span', { class: 'v', text: spName })),
       el('button', { class: 'ctx-chip', type: 'button', title: ml.title, onclick: function () { openSettings('api'); } }, el('span', { class: 'k', text: '모델' }), el('span', { class: 'v', text: ml.text })));
 
     var guard = $('prompt-guard');
-    if (ps.state !== 'mismatch' && ps.state !== 'deleted') { guard.hidden = true; guard.replaceChildren(); return; }
+    if (!ps.blocked) { guard.hidden = true; guard.replaceChildren(); return; }
     var activeName = ps.active ? ps.active.name : '';
     var msg = ps.state === 'mismatch'
-      ? '이 대화는 「' + ps.bound.name + '」 지시사항으로 진행 중입니다. 지금 선택된 「' + activeName + '」로는 이어서 할 수 없습니다. 지시사항이 섞이지 않도록 다른 지시사항은 새 대화에서 사용하세요.'
-      : '이 대화에 쓰인 「' + (ps.boundName || '알 수 없음') + '」 지시사항이 삭제되어 이어서 할 수 없습니다. 새 대화에서 진행하세요.';
+      ? '이 대화는 「' + ps.name + '」 지시사항으로 진행 중입니다. 지금 선택된 「' + activeName + '」로는 이어서 할 수 없습니다. 지시사항이 섞이지 않도록 다른 지시사항은 새 대화에서 사용하세요.'
+      : '이 대화에 쓰인 「' + (ps.name || '알 수 없음') + '」 지시사항이 삭제되었고 저장된 내용도 없어 이어서 할 수 없습니다. 새 대화에서 진행하세요.';
     var row = el('div', { class: 'row' });
     if (ps.state === 'mismatch') {
-      row.append(el('button', { class: 'btn', type: 'button', onclick: function () { switchPromptPreset(ps.bound.id); } }, '「' + ps.bound.name + '」로 되돌리기'));
+      row.append(el('button', { class: 'btn', type: 'button', onclick: function () { switchPromptPreset(ps.bound.id); } }, '「' + ps.name + '」로 되돌리기'));
     }
     row.append(el('button', { class: 'btn primary', type: 'button', onclick: newChatCarry }, icon('plus'), '새 대화 만들기' + (activeName ? ' (「' + activeName + '」)' : '')));
     guard.replaceChildren(el('div', { text: msg }), row);
     guard.hidden = false;
   }
 
-  // 차단 상태면 안내를 깜빡이고 true
+  // 차단 상태면 안내를 깜빡이고, 예전 버전 안내를 아직 확인하지 않았으면 팝업을 띄우고 true
   function promptBlocked(chat) {
-    var st = C.chatPromptStatus(S.settings, chat).state;
-    if (st !== 'mismatch' && st !== 'deleted') return false;
-    renderContext();
-    var g = $('prompt-guard');
-    g.classList.remove('flash'); void g.offsetWidth; g.classList.add('flash');
-    return true;
+    var ps = C.chatPromptStatus(S.settings, chat);
+    if (ps.blocked) {
+      renderContext();
+      var g = $('prompt-guard');
+      g.classList.remove('flash'); void g.offsetWidth; g.classList.add('flash');
+      return true;
+    }
+    if (ps.needsNotice) { openPromptNotice(chat); return true; }
+    return false;
+  }
+
+  // 같은 지시사항의 예전 버전 / 삭제된 지시사항으로 진행 중인 대화 안내
+  function openPromptNotice(chat) {
+    var ps = C.chatPromptStatus(S.settings, chat);
+    if (ps.state !== 'outdated' && ps.state !== 'deleted') return;
+    var activeName = ps.active ? ps.active.name : '';
+    $('pn-msg').textContent = ps.state === 'outdated'
+      ? '이 대화방은 「' + ps.name + '」 지시사항의 예전 내용으로 진행 중인 대화입니다. 계속하면 예전 내용 그대로 진행되며, 수정된 「' + ps.name + '」을 쓰려면 새 대화를 만드세요.'
+      : '이 대화방은 삭제된 「' + ps.name + '」 지시사항으로 진행 중인 대화입니다. 계속하면 저장된 내용 그대로 진행되며, 다른 지시사항을 쓰려면 새 대화를 만드세요.';
+    $('pn-text').textContent = ps.text;
+    $('pn-details').open = false;
+    $('pn-new').textContent = '새 대화 만들기' + (activeName ? ' (「' + activeName + '」)' : '');
+    S.noticeChatId = chat.id;
+    var d = $('prompt-notice');
+    if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  }
+
+  function closePromptNotice() {
+    var d = $('prompt-notice');
+    if (d.open) { if (d.close) d.close(); else d.removeAttribute('open'); }
+  }
+
+  function maybeShowPromptNotice() {
+    var chat = currentChat();
+    if (!chat || $('settings').open) return;
+    if (C.chatPromptStatus(S.settings, chat).needsNotice) openPromptNotice(chat);
   }
 
   function bindChatPrompt(chat) {
-    if (chat.promptPresetId) return;
-    var a = C.findPromptPreset(S.settings, S.settings.activePromptPresetId);
-    if (a) { chat.promptPresetId = a.id; chat.promptPresetName = a.name; }
+    if (!chat.promptPresetId) {
+      var a = C.findPromptPreset(S.settings, S.settings.activePromptPresetId);
+      if (a) { chat.promptPresetId = a.id; chat.promptPresetName = a.name; chat.promptSnapshot = C.promptSnapshot(a); }
+      return;
+    }
+    // 사본이 없는 예전 대화는 지금 내용으로 사본을 만든다
+    if (!chat.promptSnapshot || chat.promptSnapshot.presetId !== chat.promptPresetId) {
+      var b = C.findPromptPreset(S.settings, chat.promptPresetId);
+      if (b) chat.promptSnapshot = C.promptSnapshot(b);
+    }
   }
 
   // 입력 중인 글·첨부를 그대로 들고 새 대화로
@@ -257,6 +297,7 @@
     renderPromptQuick();
     var c = currentChat();
     if (!c || !c.messages.length) renderThread(); else renderContext();
+    maybeShowPromptNotice();
   }
 
   function renderPromptQuick() {
@@ -755,8 +796,8 @@
     var settings = S.settings;
     var t0 = Date.now();
     bindChatPrompt(chat);
-    var boundPrompt = C.findPromptPreset(settings, chat.promptPresetId);
-    var dbg = { model: settings.api.modelId, modelName: settings.api.name || settings.api.modelId, promptPreset: boundPrompt ? boundPrompt.name : '' };
+    var promptState = C.chatPromptStatus(settings, chat);
+    var dbg = { model: settings.api.modelId, modelName: settings.api.name || settings.api.modelId, promptPreset: promptState.name + (promptState.state === 'outdated' ? ' (예전 버전)' : promptState.state === 'deleted' ? ' (삭제됨, 저장된 내용)' : '') };
     asst.debug = dbg;
 
     var idx = chat.messages.indexOf(userMsg);
@@ -800,7 +841,7 @@
       dbg.candidates = cands.map(function (c) { return c.tag; });
       // Stage C — 최종 생성
       var ctx = C.assembleContext({
-        systemPrompt: boundPrompt ? boundPrompt.text : settings.systemPrompt,
+        systemPrompt: promptState.text || settings.systemPrompt,
         referenceBlock: C.formatReferenceBlock(cands),
         history: history, input: input, images: images, vision: settings.vision, context: settings.context
       });
@@ -1051,6 +1092,7 @@
     renderPresetQuick();
     renderPromptQuick();
     renderThread();
+    maybeShowPromptNotice();
   }
 
   // ───────────────────────── 모델 프리셋 ─────────────────────────
@@ -1201,7 +1243,12 @@
     var name = prompt('새 이름', p.name);
     if (name == null || !name.trim()) return;
     name = name.trim();
-    S.chats.forEach(function (c) { if (c.promptPresetId === p.id) { c.promptPresetName = name; saveChat(c); } });
+    S.chats.forEach(function (c) {
+      if (c.promptPresetId !== p.id) return;
+      c.promptPresetName = name;
+      if (c.promptSnapshot) c.promptSnapshot.name = name;
+      saveChat(c);
+    });
     persistPromptPresets(S.draft.promptPresets.map(function (x) { return x.id === p.id ? Object.assign({}, x, { name: name }) : x; }), p.id, null);
   }
 
@@ -1211,7 +1258,7 @@
     if (!p) return;
     if (list.length <= 1) { alert('지시사항 프리셋은 하나 이상 있어야 합니다.'); return; }
     var n = chatsUsingPrompt(p.id);
-    if (!confirm('「' + p.name + '」 지시사항을 삭제할까요?' + (n ? '\n이 지시사항으로 진행한 대화 ' + n + '개는 더 이어서 할 수 없게 됩니다(내용은 남음).' : ''))) return;
+    if (!confirm('「' + p.name + '」 지시사항을 삭제할까요?' + (n ? '\n이 지시사항으로 진행한 대화 ' + n + '개는 저장된 내용으로 계속할 수 있습니다.' : ''))) return;
     var rest = list.filter(function (x) { return x.id !== p.id; });
     var next = rest[0];
     var settingsActive = S.settings.activePromptPresetId === p.id ? next.id : null;
@@ -1577,6 +1624,18 @@
     $('sp-preset-rename').addEventListener('click', spPresetRename);
     $('sp-preset-delete').addEventListener('click', spPresetDelete);
     $('sp-quick').addEventListener('change', function () { switchPromptPreset(this.value); });
+    $('pn-continue').addEventListener('click', function () {
+      var chat = S.chats.get(S.noticeChatId);
+      if (chat) {
+        var ps = C.chatPromptStatus(S.settings, chat);
+        chat.promptAck = ps.ackKey;
+        saveChat(chat);
+      }
+      closePromptNotice();
+      renderContext();
+      $('input').focus();
+    });
+    $('pn-new').addEventListener('click', function () { closePromptNotice(); newChatCarry(); });
 
     // 내보내기 / 가져오기
     $('exp-btn').addEventListener('click', function () {
@@ -1706,6 +1765,7 @@
       renderThread(true);
       loadDraft();
       updateComposer();
+      maybeShowPromptNotice();
       return S.store.get('reference', 'main').catch(function () { return null; });
     }).then(function (rec) {
       if (!rec || !(rec.blob || rec.text)) { renderRefStatus(); return; }
