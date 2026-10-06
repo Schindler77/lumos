@@ -121,7 +121,9 @@
     },
     debug: false,
     presets: [],
-    activePresetId: ''
+    activePresetId: '',
+    promptPresets: [],
+    activePromptPresetId: ''
   };
 
   // ───────────────────────── 모델 프리셋 ─────────────────────────
@@ -165,6 +167,54 @@
     return PRESET_KEYS.every(function (k) {
       return JSON.stringify(presetSection(settings, k)) === JSON.stringify(presetSection(preset, k));
     });
+  }
+
+  // ───────────────────────── System Prompt 프리셋 ─────────────────────────
+  // System Prompt는 항상 프리셋 중 하나다. settings.systemPrompt는 활성 프리셋 본문의 사본.
+  function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  function findPromptPreset(settings, id) {
+    return (settings.promptPresets || []).filter(function (p) { return p.id === id; })[0] || null;
+  }
+
+  function makePromptPreset(name, text) {
+    return { id: newId('sp'), name: String(name || '').trim() || '이름 없는 지시사항', text: String(text == null ? '' : text), updatedAt: Date.now() };
+  }
+
+  // 예전 설정(프리셋 없음)은 지금 System Prompt를 첫 프리셋으로 등록
+  function ensurePromptPresets(settings) {
+    if (!Array.isArray(settings.promptPresets) || !settings.promptPresets.length) {
+      var sp = settings.systemPrompt == null ? DEFAULT_SYSTEM_PROMPT : settings.systemPrompt;
+      settings.promptPresets = [makePromptPreset(sp === DEFAULT_SYSTEM_PROMPT ? '기본 지시사항' : '내 지시사항', sp)];
+    }
+    var active = findPromptPreset(settings, settings.activePromptPresetId) || settings.promptPresets[0];
+    settings.activePromptPresetId = active.id;
+    settings.systemPrompt = active.text;
+    return settings;
+  }
+
+  function selectPromptPreset(settings, id) {
+    var out = clone(settings);
+    var p = findPromptPreset(out, id);
+    if (!p) return out;
+    out.activePromptPresetId = p.id;
+    out.systemPrompt = p.text;
+    return out;
+  }
+
+  /*
+   * 대화방 ↔ 프롬프트 프리셋 관계
+   *   unbound  : 아직 묶이지 않음 (새 대화, 기능 이전 대화) → 보내면 활성 프리셋으로 묶음
+   *   ok       : 묶인 프리셋 = 활성 프리셋
+   *   mismatch : 다른 프리셋이 선택됨 → 전송 차단
+   *   deleted  : 묶인 프리셋이 삭제됨 → 새 대화로만 진행
+   */
+  function chatPromptStatus(settings, chat) {
+    var active = findPromptPreset(settings, settings.activePromptPresetId);
+    if (!chat || !chat.promptPresetId) return { state: 'unbound', active: active, bound: null };
+    var bound = findPromptPreset(settings, chat.promptPresetId);
+    if (!bound) return { state: 'deleted', active: active, bound: null, boundName: chat.promptPresetName || '' };
+    return { state: active && bound.id === active.id ? 'ok' : 'mismatch', active: active, bound: bound };
   }
 
   function findPreset(settings, id) {
@@ -1109,6 +1159,8 @@
     ERROR_TEXT: ERROR_TEXT,
     clone: clone, mergeDefaults: mergeDefaults, exportSettings: exportSettings,
     PRESET_KEYS: PRESET_KEYS, presetFromSettings: presetFromSettings, applyPreset: applyPreset,
+    findPromptPreset: findPromptPreset, makePromptPreset: makePromptPreset, ensurePromptPresets: ensurePromptPresets,
+    selectPromptPreset: selectPromptPreset, chatPromptStatus: chatPromptStatus,
     presetMatches: presetMatches, findPreset: findPreset,
     parseUrl: parseUrl, hostKind: hostKind, isLocalKind: isLocalKind,
     resolveApiUrl: resolveApiUrl, modelsUrlFrom: modelsUrlFrom, stripBearer: stripBearer,

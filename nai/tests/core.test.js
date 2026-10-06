@@ -525,3 +525,48 @@ test('프리셋: 내보내기 시 프리셋 키도 제외, 비밀값 마스킹 �
   assert.equal(s.presets[0].api.apiKey, 'sk-preset-1234');
   assert.ok(C.secretsOf(s).includes('ptok-preset'));
 });
+
+// ───────── System Prompt 프리셋 · 대화방 고정 ─────────
+test('ensurePromptPresets: 예전 설정은 현재 System Prompt를 첫 프리셋으로', () => {
+  const s = C.ensurePromptPresets(settings({ systemPrompt: 'MY RULES' }));
+  assert.equal(s.promptPresets.length, 1);
+  assert.equal(s.promptPresets[0].name, '내 지시사항');
+  assert.equal(s.promptPresets[0].text, 'MY RULES');
+  assert.equal(s.activePromptPresetId, s.promptPresets[0].id);
+  const d = C.ensurePromptPresets(settings());
+  assert.equal(d.promptPresets[0].name, '기본 지시사항');
+  // 활성 id가 사라졌으면 첫 프리셋으로
+  d.activePromptPresetId = 'gone';
+  C.ensurePromptPresets(d);
+  assert.equal(d.activePromptPresetId, d.promptPresets[0].id);
+});
+
+test('selectPromptPreset: 활성 프리셋과 systemPrompt 동기화, 모델 설정은 그대로', () => {
+  const s = C.ensurePromptPresets(settings({ api: { modelId: 'm1' } }));
+  const b = C.makePromptPreset('B', 'B RULES');
+  s.promptPresets.push(b);
+  const t = C.selectPromptPreset(s, b.id);
+  assert.equal(t.activePromptPresetId, b.id);
+  assert.equal(t.systemPrompt, 'B RULES');
+  assert.equal(t.api.modelId, 'm1');
+  assert.notEqual(s.activePromptPresetId, b.id); // 원본 불변
+});
+
+test('chatPromptStatus: unbound / ok / mismatch / deleted', () => {
+  const s = C.ensurePromptPresets(settings());
+  const a = s.promptPresets[0];
+  const b = C.makePromptPreset('B', 'x');
+  s.promptPresets.push(b);
+  assert.equal(C.chatPromptStatus(s, null).state, 'unbound');
+  assert.equal(C.chatPromptStatus(s, { messages: [] }).state, 'unbound');
+  assert.equal(C.chatPromptStatus(s, { promptPresetId: a.id }).state, 'ok');
+  const mm = C.chatPromptStatus(s, { promptPresetId: b.id });
+  assert.equal(mm.state, 'mismatch');
+  assert.equal(mm.bound.name, 'B');
+  const del = C.chatPromptStatus(s, { promptPresetId: 'gone', promptPresetName: '옛 지시사항' });
+  assert.equal(del.state, 'deleted');
+  assert.equal(del.boundName, '옛 지시사항');
+  // 모델 프리셋을 바꿔도 프롬프트 상태는 그대로
+  const mp = C.presetFromSettings(settings({ api: { modelId: 'other' } }), 'M');
+  assert.equal(C.chatPromptStatus(C.applyPreset(s, mp), { promptPresetId: a.id }).state, 'ok');
+});
